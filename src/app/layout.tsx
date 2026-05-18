@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LC Queue",
+  title: "LeetLoop",
   description: "A spaced-repetition queue for LeetCode review.",
 };
 
@@ -28,7 +28,7 @@ export default function RootLayout({
             <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <Link href="/" className="w-fit">
                 <span className="block text-xl font-semibold tracking-normal text-[var(--foreground)]">
-                  LC Queue
+                  LeetLoop
                 </span>
                 <span className="block text-sm text-[var(--muted)]">
                   Spaced review for coding interviews

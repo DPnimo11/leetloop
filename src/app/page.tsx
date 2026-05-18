@@ -31,7 +31,7 @@ export default function TodayPage() {
             Your review queue is warming up.
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            The app shell is ready. The next checkpoint adds local data, scheduling,
+            The app shell is ready. This checkpoint adds local data, scheduling,
             and tests before the real queue UI comes online.
           </p>
         </div>

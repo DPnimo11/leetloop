@@ -1,6 +1,6 @@
-# LC Queue
+# LeetLoop
 
-LC Queue is a lightweight spaced-repetition tracker for LeetCode-style interview prep. It helps answer the daily question: what should I revisit today?
+LeetLoop is a lightweight spaced-repetition tracker for LeetCode-style interview prep. It helps answer the daily question: what should I revisit today?
 
 ## MVP
 
