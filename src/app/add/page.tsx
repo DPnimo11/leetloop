@@ -1,3 +1,5 @@
+import { ProblemForm } from "@/components/ProblemForm";
+
 export default function AddProblemPage() {
   return (
     <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -5,9 +7,9 @@ export default function AddProblemPage() {
         Add
       </p>
       <h1 className="mt-1 text-2xl font-semibold tracking-normal">Add a problem</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-        The manual problem form lands after the data layer checkpoint.
-      </p>
+      <div className="mt-5">
+        <ProblemForm />
+      </div>
     </section>
   );
 }

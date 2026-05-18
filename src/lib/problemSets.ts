@@ -5,9 +5,20 @@ import type {
   ProblemTemplate,
 } from "@/types/problem-set";
 import type { ProblemInput } from "@/types/problem";
+import { RAW_PROBLEM_SET_ENTRIES } from "./problemSetData";
 import { normalizePatternTags } from "./tags";
 
 export const LEETCODE_PROBLEM_BASE_URL = "https://leetcode.com/problems";
+
+export type RawProblemSetEntry = readonly [
+  setSlug: BuiltInProblemSetSlug,
+  sourceGroup: string,
+  questionFrontendId: string,
+  titleSlug: string,
+  title: string,
+  difficulty: "EASY" | "MEDIUM" | "HARD",
+  topicTags: string,
+];
 
 export const BUILT_IN_PROBLEM_SET_META: Omit<ProblemSet, "problems">[] = [
   {
@@ -24,9 +35,48 @@ export const BUILT_IN_PROBLEM_SET_META: Omit<ProblemSet, "problems">[] = [
   },
 ];
 
+const DIFFICULTY_LABELS = {
+  EASY: "Easy",
+  MEDIUM: "Medium",
+  HARD: "Hard",
+} as const;
+
+function getSetMembershipsBySlug(): Map<string, BuiltInProblemSetSlug[]> {
+  const memberships = new Map<string, Set<BuiltInProblemSetSlug>>();
+
+  for (const [setSlug, , , titleSlug] of RAW_PROBLEM_SET_ENTRIES) {
+    const existing = memberships.get(titleSlug) ?? new Set<BuiltInProblemSetSlug>();
+    existing.add(setSlug);
+    memberships.set(titleSlug, existing);
+  }
+
+  return new Map(
+    Array.from(memberships.entries()).map(([titleSlug, setSlugs]) => [titleSlug, Array.from(setSlugs)]),
+  );
+}
+
+const SET_MEMBERSHIPS_BY_SLUG = getSetMembershipsBySlug();
+
+function createTemplateFromEntry(entry: RawProblemSetEntry): ProblemTemplate {
+  const [setSlug, sourceGroup, questionFrontendId, titleSlug, title, difficulty, topicTags] = entry;
+
+  return {
+    id: `${setSlug}:${titleSlug}`,
+    title,
+    titleSlug,
+    url: leetcodeProblemUrl(titleSlug),
+    platform: "LeetCode",
+    difficulty: DIFFICULTY_LABELS[difficulty],
+    patterns: normalizePatternTags(topicTags.split("|").filter(Boolean)),
+    sourceSetSlugs: SET_MEMBERSHIPS_BY_SLUG.get(titleSlug) ?? [setSlug],
+    sourceGroups: [sourceGroup],
+    questionFrontendId,
+  };
+}
+
 export const BUILT_IN_PROBLEM_SETS: ProblemSet[] = BUILT_IN_PROBLEM_SET_META.map((set) => ({
   ...set,
-  problems: [],
+  problems: RAW_PROBLEM_SET_ENTRIES.filter(([setSlug]) => setSlug === set.slug).map(createTemplateFromEntry),
 }));
 
 export function leetcodeProblemUrl(titleSlug: string): string {

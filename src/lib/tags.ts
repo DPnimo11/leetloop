@@ -37,8 +37,13 @@ const TAG_ALIASES: Record<string, string> = {
   "Depth-First Search": "DFS",
   "Breadth-First Search": "BFS",
   Tree: "Trees",
+  "Binary Tree": "Trees",
+  "Binary Search Tree": "Trees",
   Graph: "Graphs",
+  "Graph Theory": "Graphs",
   "Heap (Priority Queue)": "Heap / Priority Queue",
+  "Union-Find": "Union Find",
+  "Doubly-Linked List": "Linked List",
   "Dynamic Programming": "Dynamic Programming",
 };
 
