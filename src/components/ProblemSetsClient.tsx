@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ListPlus, Search } from "lucide-react";
+import { Check, CheckSquare, ListPlus, Search, Square } from "lucide-react";
 import { BUILT_IN_PROBLEM_SETS } from "@/lib/problemSets";
 import type { BuiltInProblemSetSlug, ProblemTemplate } from "@/types/problem-set";
 import type { Difficulty } from "@/types/problem";
@@ -41,11 +41,25 @@ export function ProblemSetsClient() {
   const selectedVisibleCount = selectedIds.filter((id) =>
     selectableProblems.some((problem) => problem.id === id),
   ).length;
+  const allVisibleSelected =
+    selectableProblems.length > 0 && selectedVisibleCount === selectableProblems.length;
 
   function toggleSelected(problemId: string) {
     setSelectedIds((current) =>
       current.includes(problemId) ? current.filter((id) => id !== problemId) : [...current, problemId],
     );
+  }
+
+  function toggleSelectAllVisible() {
+    const visibleIds = new Set(selectableProblems.map((problem) => problem.id));
+
+    setSelectedIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((id) => !visibleIds.has(id));
+      }
+
+      return Array.from(new Set([...current, ...visibleIds]));
+    });
   }
 
   function addOne(problem: ProblemTemplate) {
@@ -135,15 +149,27 @@ export function ProblemSetsClient() {
             </select>
           </div>
 
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#98a2b3]"
-            disabled={!ready || selectedVisibleCount === 0}
-            onClick={addSelected}
-            type="button"
-          >
-            <ListPlus size={16} />
-            Add selected
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:text-[#98a2b3]"
+              disabled={!ready || selectableProblems.length === 0}
+              onClick={toggleSelectAllVisible}
+              type="button"
+            >
+              {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+              {allVisibleSelected ? "Clear visible" : "Select all"}
+            </button>
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#98a2b3]"
+              disabled={!ready || selectedVisibleCount === 0}
+              onClick={addSelected}
+              type="button"
+            >
+              <ListPlus size={16} />
+              Add selected
+              {selectedVisibleCount ? ` (${selectedVisibleCount})` : ""}
+            </button>
+          </div>
         </div>
       </section>
 
