@@ -36,6 +36,16 @@ export function isDueOnOrBefore(nextReviewAt: string | undefined, today = new Da
   return toLocalDateKey(nextReviewDate) <= toLocalDateKey(today);
 }
 
+export function isDueToday(nextReviewAt: string | undefined, today = new Date()): boolean {
+  const nextReviewDate = parseDate(nextReviewAt);
+
+  if (!nextReviewDate) {
+    return false;
+  }
+
+  return toLocalDateKey(nextReviewDate) === toLocalDateKey(today);
+}
+
 export function isOverdue(nextReviewAt: string | undefined, today = new Date()): boolean {
   const nextReviewDate = parseDate(nextReviewAt);
 

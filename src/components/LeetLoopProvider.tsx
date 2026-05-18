@@ -18,6 +18,8 @@ import {
   addProblem as addProblemToData,
   createEmptyData,
   deleteProblem as deleteProblemFromData,
+  exportData as exportDataFromStorage,
+  importData as importDataFromStorage,
   loadData,
   logAttempt as logAttemptToData,
   saveData,
@@ -43,6 +45,8 @@ type LeetLoopContextValue = {
   updateProblem: (problemId: string, updates: Partial<ProblemInput>) => void;
   deleteProblem: (problemId: string) => void;
   logAttempt: (problemId: string, input: AttemptInput) => Attempt;
+  exportJson: () => string;
+  importJson: (raw: string) => LeetLoopData;
   getProblemAttempts: (problemId: string) => Attempt[];
   isTemplateInQueue: (template: ProblemTemplate) => boolean;
 };
@@ -135,6 +139,16 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
     });
   }, [commit]);
 
+  const exportJson = useCallback(() => exportDataFromStorage(dataRef.current), []);
+
+  const importJson = useCallback((raw: string) => {
+    const importedData = importDataFromStorage(raw);
+    const savedData = saveData(importedData);
+    dataRef.current = savedData;
+    setData(savedData);
+    return savedData;
+  }, []);
+
   const getProblemAttempts = useCallback(
     (problemId: string) =>
       data.attempts
@@ -158,6 +172,8 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       updateProblem,
       deleteProblem,
       logAttempt,
+      exportJson,
+      importJson,
       getProblemAttempts,
       isTemplateInQueue,
     }),
@@ -166,7 +182,9 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       addProblemFromTemplate,
       data,
       deleteProblem,
+      exportJson,
       getProblemAttempts,
+      importJson,
       isTemplateInQueue,
       loadError,
       logAttempt,
