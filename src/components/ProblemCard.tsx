@@ -32,7 +32,7 @@ export function ProblemCard({ problem }: { problem: Problem }) {
             ))}
           </div>
           <p className="mt-3 text-sm text-[var(--muted)]">
-            Last: {formatAttemptResult(problem.lastResult)} · Reviews: {problem.reviewCount}
+            Last: {formatAttemptResult(problem.lastResult)} - Reviews: {problem.reviewCount}
           </p>
         </div>
 

@@ -2,20 +2,13 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { LeetLoopProvider } from "@/components/LeetLoopProvider";
+import { ShellNav } from "@/components/ShellNav";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "LeetLoop",
   description: "A spaced-repetition queue for LeetCode review.",
 };
-
-const navItems = [
-  { href: "/", label: "Today" },
-  { href: "/problems", label: "Problems" },
-  { href: "/problem-sets", label: "Sets" },
-  { href: "/add", label: "Add" },
-  { href: "/analytics", label: "Analytics" },
-];
 
 export default function RootLayout({
   children,
@@ -37,13 +30,7 @@ export default function RootLayout({
                     Spaced review for coding interviews
                   </span>
                 </Link>
-                <nav aria-label="Main navigation" className="flex flex-wrap gap-1 text-sm font-medium">
-                  {navItems.map((item) => (
-                    <Link className="shell-link" href={item.href} key={item.href}>
-                      {item.label}
-                    </Link>
-                  ))}
-                </nav>
+                <ShellNav />
               </div>
             </header>
             <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{children}</main>

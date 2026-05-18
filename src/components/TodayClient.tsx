@@ -22,6 +22,9 @@ function sortByReviewDate(problems: Problem[]): Problem[] {
 
 function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
   const { addProblemFromTemplate, ready } = useLeetLoop();
+  const sourceLabel = template.sourceSetSlugs
+    .map((slug) => (slug === "leetcode-75" ? "LeetCode 75" : "Top Interview 150"))
+    .join(", ");
 
   return (
     <article className="rounded-lg border border-[var(--border)] bg-white p-4">
@@ -43,9 +46,7 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
               <TagPill key={tag} tag={tag} />
             ))}
           </div>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            {template.sourceSetSlugs.includes("leetcode-75") ? "LeetCode 75" : "Top Interview 150"}
-          </p>
+          <p className="mt-2 text-sm text-[var(--muted)]">{sourceLabel}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <a
@@ -78,9 +79,19 @@ export function TodayClient() {
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const overdue = sortByReviewDate(activeProblems.filter((problem) => isOverdue(problem.nextReviewAt, today)));
   const dueToday = sortByReviewDate(activeProblems.filter((problem) => isDueToday(problem.nextReviewAt, today)));
-  const suggestedNew = getAllProblemTemplates()
-    .filter((template) => !isTemplateInQueue(template))
-    .slice(0, 5);
+  const suggestedNew: ProblemTemplate[] = [];
+
+  for (const template of getAllProblemTemplates()) {
+    const alreadySuggested = suggestedNew.some((item) => item.titleSlug === template.titleSlug);
+
+    if (!alreadySuggested && !isTemplateInQueue(template)) {
+      suggestedNew.push(template);
+    }
+
+    if (suggestedNew.length >= 5) {
+      break;
+    }
+  }
   const recentAttempts = [...data.attempts]
     .sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime())
     .slice(0, 5);
@@ -102,7 +113,7 @@ export function TodayClient() {
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             {dueCount
-              ? "Start with overdue work, then clear today’s queue."
+              ? "Start with overdue work, then clear today's queue."
               : "Nice. Add a new problem or pull one from a built-in list."}
           </p>
         </div>

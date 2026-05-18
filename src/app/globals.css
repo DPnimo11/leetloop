@@ -63,3 +63,8 @@ button {
   color: var(--accent-strong);
   outline: none;
 }
+
+.shell-link-active {
+  background: #e6f4f1;
+  color: var(--accent-strong);
+}

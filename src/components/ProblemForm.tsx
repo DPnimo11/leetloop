@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
-import { DEFAULT_PATTERN_TAGS } from "@/lib/tags";
+import { DEFAULT_PATTERN_TAGS, normalizePatternTags } from "@/lib/tags";
 import { DIFFICULTIES, PLATFORMS, type Difficulty, type Platform } from "@/types/problem";
 import { useLeetLoop } from "./LeetLoopProvider";
 
@@ -27,7 +27,7 @@ export function ProblemForm() {
   const [error, setError] = useState("");
 
   const allPatterns = useMemo(
-    () => Array.from(new Set([...selectedTags, ...splitCustomTags(customTags)])),
+    () => normalizePatternTags([...selectedTags, ...splitCustomTags(customTags)]),
     [customTags, selectedTags],
   );
 
