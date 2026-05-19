@@ -20,6 +20,15 @@ function sortByReviewDate(problems: Problem[]): Problem[] {
   });
 }
 
+function sortByCreatedDate(problems: Problem[]): Problem[] {
+  return [...problems].sort((a, b) => {
+    const aTime = parseDate(a.createdAt)?.getTime() ?? 0;
+    const bTime = parseDate(b.createdAt)?.getTime() ?? 0;
+
+    return aTime - bTime || a.title.localeCompare(b.title);
+  });
+}
+
 function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
   const { addProblemFromTemplate, ready } = useLeetLoop();
   const sourceLabel = template.sourceSetSlugs
@@ -79,16 +88,20 @@ export function TodayClient() {
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const overdue = sortByReviewDate(activeProblems.filter((problem) => isOverdue(problem.nextReviewAt, today)));
   const dueToday = sortByReviewDate(activeProblems.filter((problem) => isDueToday(problem.nextReviewAt, today)));
-  const suggestedNew: ProblemTemplate[] = [];
+  const queuedNew = sortByCreatedDate(
+    activeProblems.filter((problem) => problem.status === "new" && !problem.nextReviewAt),
+  );
+  const visibleQueuedNew = queuedNew.slice(0, 5);
+  const suggestedTemplates: ProblemTemplate[] = [];
 
   for (const template of getAllProblemTemplates()) {
-    const alreadySuggested = suggestedNew.some((item) => item.titleSlug === template.titleSlug);
+    const alreadySuggested = suggestedTemplates.some((item) => item.titleSlug === template.titleSlug);
 
     if (!alreadySuggested && !isTemplateInQueue(template)) {
-      suggestedNew.push(template);
+      suggestedTemplates.push(template);
     }
 
-    if (suggestedNew.length >= 5) {
+    if (suggestedTemplates.length >= 5) {
       break;
     }
   }
@@ -114,7 +127,9 @@ export function TodayClient() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             {dueCount
               ? "Start with overdue work, then clear today's queue."
-              : "Nice. Add a new problem or pull one from a built-in list."}
+              : queuedNew.length
+                ? "No scheduled reviews are waiting. Start one of your queued new problems."
+                : "Nice. Add a new problem or pull one from a built-in list."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -144,8 +159,8 @@ export function TodayClient() {
           <p className="mt-1 text-2xl font-semibold">{dueToday.length}</p>
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <p className="text-sm text-[var(--muted)]">Active problems</p>
-          <p className="mt-1 text-2xl font-semibold">{activeProblems.length}</p>
+          <p className="text-sm text-[var(--muted)]">New in queue</p>
+          <p className="mt-1 text-2xl font-semibold">{queuedNew.length}</p>
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
           <p className="text-sm text-[var(--muted)]">Attempts logged</p>
@@ -172,11 +187,26 @@ export function TodayClient() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-normal">Suggested New</h2>
-        {suggestedNew.length ? (
-          suggestedNew.map((template) => <SuggestedProblemCard key={template.id} template={template} />)
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold tracking-normal">Start New</h2>
+            <p className="text-sm text-[var(--muted)]">
+              Imported problems with no attempts show up here before template suggestions.
+            </p>
+          </div>
+          <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/problems">
+            View all
+          </Link>
+        </div>
+        {visibleQueuedNew.length ? (
+          visibleQueuedNew.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
+        ) : suggestedTemplates.length ? (
+          suggestedTemplates.map((template) => <SuggestedProblemCard key={template.id} template={template} />)
         ) : (
-          <EmptyState title="All templates added" copy="Every built-in template is already in your queue." />
+          <EmptyState
+            title="No new starts waiting"
+            copy="Every built-in template is already in your queue and your new items have been attempted."
+          />
         )}
       </section>
 
