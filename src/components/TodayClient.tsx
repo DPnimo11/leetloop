@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { Check, ExternalLink, ListPlus, Plus } from "lucide-react";
 import { getAllProblemTemplates } from "@/lib/problemSets";
-import { isDueToday, isOverdue, parseDate } from "@/lib/dates";
+import { isDueOnOrBefore, isDueToday, isOverdue, parseDate } from "@/lib/dates";
 import { formatAttemptResult, formatDateTime } from "@/lib/format";
+import { countUnscheduledNewProblems, isReviewProblem, DAILY_PLAN_CAPACITY } from "@/lib/planning";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
 import { DifficultyBadge, TagPill } from "./Badges";
@@ -17,15 +18,6 @@ function sortByReviewDate(problems: Problem[]): Problem[] {
     const aTime = parseDate(a.nextReviewAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
     const bTime = parseDate(b.nextReviewAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
     return aTime - bTime;
-  });
-}
-
-function sortByCreatedDate(problems: Problem[]): Problem[] {
-  return [...problems].sort((a, b) => {
-    const aTime = parseDate(a.createdAt)?.getTime() ?? 0;
-    const bTime = parseDate(b.createdAt)?.getTime() ?? 0;
-
-    return aTime - bTime || a.title.localeCompare(b.title);
   });
 }
 
@@ -86,12 +78,21 @@ export function TodayClient() {
   const { data, isTemplateInQueue, ready } = useLeetLoop();
   const today = new Date();
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
-  const overdue = sortByReviewDate(activeProblems.filter((problem) => isOverdue(problem.nextReviewAt, today)));
-  const dueToday = sortByReviewDate(activeProblems.filter((problem) => isDueToday(problem.nextReviewAt, today)));
-  const queuedNew = sortByCreatedDate(
-    activeProblems.filter((problem) => problem.status === "new" && !problem.nextReviewAt),
+  const reviewProblems = activeProblems.filter(isReviewProblem);
+  const overdue = sortByReviewDate(reviewProblems.filter((problem) => isOverdue(problem.nextReviewAt, today)));
+  const dueToday = sortByReviewDate(reviewProblems.filter((problem) => isDueToday(problem.nextReviewAt, today)));
+  const plannedNewToday = sortByReviewDate(
+    activeProblems.filter(
+      (problem) => problem.status === "new" && isDueOnOrBefore(problem.nextReviewAt, today),
+    ),
   );
-  const visibleQueuedNew = queuedNew.slice(0, 5);
+  const futurePlannedNewCount = activeProblems.filter(
+    (problem) =>
+      problem.status === "new" &&
+      problem.nextReviewAt &&
+      !isDueOnOrBefore(problem.nextReviewAt, today),
+  ).length;
+  const unscheduledNewCount = countUnscheduledNewProblems(data);
   const suggestedTemplates: ProblemTemplate[] = [];
 
   for (const template of getAllProblemTemplates()) {
@@ -108,7 +109,7 @@ export function TodayClient() {
   const recentAttempts = [...data.attempts]
     .sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime())
     .slice(0, 5);
-  const dueCount = overdue.length + dueToday.length;
+  const readyCount = overdue.length + dueToday.length + plannedNewToday.length;
 
   if (!ready) {
     return <EmptyState title="Loading queue" copy="Local data is loading." />;
@@ -122,13 +123,13 @@ export function TodayClient() {
             Today
           </p>
           <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
-            {dueCount ? `${dueCount} review${dueCount === 1 ? "" : "s"} ready` : "No reviews due today"}
+            {readyCount ? `${readyCount} item${readyCount === 1 ? "" : "s"} ready` : "No reviews due today"}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            {dueCount
+            {overdue.length || dueToday.length
               ? "Start with overdue work, then clear today's queue."
-              : queuedNew.length
-                ? "No scheduled reviews are waiting. Start one of your queued new problems."
+              : plannedNewToday.length
+                ? "No reviews are waiting. Start today's planned new problem."
                 : "Nice. Add a new problem or pull one from a built-in list."}
           </p>
         </div>
@@ -159,8 +160,8 @@ export function TodayClient() {
           <p className="mt-1 text-2xl font-semibold">{dueToday.length}</p>
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <p className="text-sm text-[var(--muted)]">New in queue</p>
-          <p className="mt-1 text-2xl font-semibold">{queuedNew.length}</p>
+          <p className="text-sm text-[var(--muted)]">New today</p>
+          <p className="mt-1 text-2xl font-semibold">{plannedNewToday.length}</p>
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
           <p className="text-sm text-[var(--muted)]">Attempts logged</p>
@@ -191,21 +192,27 @@ export function TodayClient() {
           <div>
             <h2 className="text-xl font-semibold tracking-normal">Start New</h2>
             <p className="text-sm text-[var(--muted)]">
-              Imported problems with no attempts show up here before template suggestions.
+              Planned new starts fill the day up to {DAILY_PLAN_CAPACITY} total items after reviews.
             </p>
           </div>
-          <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/problems">
-            View all
+          <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
+            View upcoming
           </Link>
         </div>
-        {visibleQueuedNew.length ? (
-          visibleQueuedNew.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
+        {plannedNewToday.length ? (
+          plannedNewToday.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
         ) : suggestedTemplates.length ? (
           suggestedTemplates.map((template) => <SuggestedProblemCard key={template.id} template={template} />)
         ) : (
           <EmptyState
             title="No new starts waiting"
-            copy="Every built-in template is already in your queue and your new items have been attempted."
+            copy={
+              unscheduledNewCount
+                ? "Your upcoming plan is full. More new problems will be scheduled as space opens."
+                : futurePlannedNewCount
+                  ? "Your new starts are planned for upcoming days."
+                  : "Every built-in template is already in your queue and your new items have been attempted."
+            }
           />
         )}
       </section>

@@ -30,6 +30,7 @@ import {
   getProblemLeetcodeSlug,
   isTemplateAdded,
 } from "@/lib/problemSets";
+import { planNewProblemStarts } from "@/lib/planning";
 
 type AddTemplateResult = {
   added: boolean;
@@ -62,7 +63,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     queueMicrotask(() => {
       try {
-        const loadedData = loadData();
+        const loadedData = saveData(planNewProblemStarts(loadData()));
         dataRef.current = loadedData;
         setData(loadedData);
       } catch (error) {
@@ -78,7 +79,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback(<T,>(updater: (current: LeetLoopData) => { data: LeetLoopData; result: T }) => {
     const next = updater(dataRef.current);
-    const savedData = saveData(next.data);
+    const savedData = saveData(planNewProblemStarts(next.data));
     dataRef.current = savedData;
     setData(savedData);
     return next.result;
@@ -143,7 +144,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
   const importJson = useCallback((raw: string) => {
     const importedData = importDataFromStorage(raw);
-    const savedData = saveData(importedData);
+    const savedData = saveData(planNewProblemStarts(importedData));
     dataRef.current = savedData;
     setData(savedData);
     return savedData;
