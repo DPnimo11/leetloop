@@ -110,6 +110,7 @@ export function TodayClient() {
     .sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime())
     .slice(0, 5);
   const readyCount = overdue.length + dueToday.length + plannedNewToday.length;
+  const todayPlan = [...dueToday, ...plannedNewToday];
 
   if (!ready) {
     return <EmptyState title="Loading queue" copy="Local data is loading." />;
@@ -180,42 +181,48 @@ export function TodayClient() {
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold tracking-normal">Due Today</h2>
-        {dueToday.length ? (
-          dueToday.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
-        ) : (
-          <EmptyState title="No problems due today" copy="Add a new problem or review a weak pattern." />
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold tracking-normal">Start New</h2>
-            <p className="text-sm text-[var(--muted)]">
-              Planned new starts fill the day up to {DAILY_PLAN_CAPACITY} total items after reviews.
-            </p>
-          </div>
-          <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
-            View upcoming
-          </Link>
-        </div>
-        {plannedNewToday.length ? (
-          plannedNewToday.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
-        ) : suggestedTemplates.length ? (
-          suggestedTemplates.map((template) => <SuggestedProblemCard key={template.id} template={template} />)
+        {todayPlan.length ? (
+          todayPlan.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
         ) : (
           <EmptyState
-            title="No new starts waiting"
+            title="No work due today"
             copy={
-              unscheduledNewCount
-                ? "Your upcoming plan is full. More new problems will be scheduled as space opens."
-                : futurePlannedNewCount
-                  ? "Your new starts are planned for upcoming days."
-                  : "Every built-in template is already in your queue and your new items have been attempted."
+              futurePlannedNewCount
+                ? "Your new starts are planned for upcoming days."
+                : "Add a new problem or review a weak pattern."
             }
           />
         )}
       </section>
+
+      {todayPlan.length ? (
+        <section className="rounded-lg border border-[var(--border)] bg-white p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-[var(--muted)]">
+              Reviews plus planned new starts fill the day up to {DAILY_PLAN_CAPACITY} total items.
+            </p>
+            <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
+              View upcoming
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
+      {!todayPlan.length && suggestedTemplates.length ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold tracking-normal">Suggested New</h2>
+          {suggestedTemplates.map((template) => (
+            <SuggestedProblemCard key={template.id} template={template} />
+          ))}
+        </section>
+      ) : null}
+
+      {!todayPlan.length && !suggestedTemplates.length && unscheduledNewCount ? (
+        <EmptyState
+          title="Upcoming plan is full"
+          copy="More new problems will be scheduled as space opens."
+        />
+      ) : null}
 
       <section className="rounded-lg border border-[var(--border)] bg-white p-5">
         <div className="flex items-center gap-2">
