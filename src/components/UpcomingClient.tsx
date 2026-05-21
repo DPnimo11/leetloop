@@ -100,6 +100,9 @@ export function UpcomingClient() {
                     {day.newStarts.length} new
                   </span>
                   <span className="rounded-full border border-[var(--border)] bg-white px-2 py-1">
+                    {day.completedCount} done
+                  </span>
+                  <span className="rounded-full border border-[var(--border)] bg-white px-2 py-1">
                     {openSlots} open
                   </span>
                 </div>

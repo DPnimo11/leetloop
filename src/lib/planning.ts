@@ -10,8 +10,15 @@ export type UpcomingPlanDay = {
   dateKey: string;
   reviews: Problem[];
   newStarts: Problem[];
+  completedCount: number;
   load: number;
   capacity: number;
+};
+
+type PlanDay = {
+  date: Date;
+  dateKey: string;
+  loadIds: Set<string>;
 };
 
 function sortByCreatedDate(problems: Problem[]): Problem[] {
@@ -68,6 +75,21 @@ export function getNewStartsForDate(problems: Problem[], date: Date): Problem[] 
   );
 }
 
+export function getCompletedProblemIdsForDate(data: LeetLoopData, date: Date): Set<string> {
+  const dateKey = toLocalDateKey(date);
+  const completedIds = new Set<string>();
+
+  for (const attempt of data.attempts) {
+    const attemptedAt = parseDate(attempt.attemptedAt);
+
+    if (attemptedAt && toLocalDateKey(attemptedAt) === dateKey) {
+      completedIds.add(attempt.problemId);
+    }
+  }
+
+  return completedIds;
+}
+
 export function planNewProblemStarts(
   data: LeetLoopData,
   options: {
@@ -80,28 +102,56 @@ export function planNewProblemStarts(
   const today = startOfLocalDay(now);
   const days = options.days ?? UPCOMING_PLAN_DAYS;
   const dailyCapacity = options.dailyCapacity ?? DAILY_PLAN_CAPACITY;
-  const planDays = Array.from({ length: days }, (_, index) => {
+  const planDays: PlanDay[] = Array.from({ length: days }, (_, index) => {
     const date = addDays(today, index);
     const reviews = getReviewsForDate(data.problems, date, today);
+    const completedIds = getCompletedProblemIdsForDate(data, date);
+    const loadIds = new Set<string>([
+      ...reviews.map((problem) => problem.id),
+      ...completedIds,
+    ]);
 
     return {
       date,
       dateKey: toLocalDateKey(date),
-      load: reviews.length,
+      loadIds,
     };
   });
+  const planDayByDateKey = new Map(planDays.map((day) => [day.dateKey, day]));
   const assignments = new Map<string, string>();
   const newProblems = sortByCreatedDate(data.problems.filter(isNewProblem));
 
   for (const problem of newProblems) {
-    const day = planDays.find((item) => item.load < dailyCapacity);
+    const currentDateKey = getPlannedDateKey(problem);
+
+    if (!currentDateKey) {
+      continue;
+    }
+
+    const day = planDayByDateKey.get(currentDateKey);
+
+    if (!day || day.loadIds.size >= dailyCapacity) {
+      assignments.set(problem.id, "");
+      continue;
+    }
+
+    day.loadIds.add(problem.id);
+    assignments.set(problem.id, problem.nextReviewAt ?? day.date.toISOString());
+  }
+
+  for (const problem of newProblems) {
+    if (assignments.has(problem.id)) {
+      continue;
+    }
+
+    const day = planDays.find((item) => item.loadIds.size < dailyCapacity);
 
     if (!day) {
       assignments.set(problem.id, "");
       continue;
     }
 
-    day.load += 1;
+    day.loadIds.add(problem.id);
     assignments.set(problem.id, day.date.toISOString());
   }
 
@@ -155,13 +205,20 @@ export function getUpcomingPlan(
     const date = addDays(today, index);
     const reviews = getReviewsForDate(data.problems, date, today);
     const newStarts = getNewStartsForDate(data.problems, date);
-    const load = reviews.length + newStarts.length;
+    const pendingIds = new Set<string>([
+      ...reviews.map((problem) => problem.id),
+      ...newStarts.map((problem) => problem.id),
+    ]);
+    const completedIds = getCompletedProblemIdsForDate(data, date);
+    const completedCount = [...completedIds].filter((problemId) => !pendingIds.has(problemId)).length;
+    const load = pendingIds.size + completedCount;
 
     return {
       date,
       dateKey: toLocalDateKey(date),
       reviews,
       newStarts,
+      completedCount,
       load,
       capacity: dailyCapacity,
     };
