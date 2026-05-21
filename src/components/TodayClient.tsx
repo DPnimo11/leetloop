@@ -304,7 +304,7 @@ export function TodayClient() {
         <section className="rounded-lg border border-[var(--border)] bg-white p-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--muted)]">
-              Planned work fills the day up to {DAILY_PLAN_CAPACITY} items. Done items count toward today&apos;s slots.
+              Planned work fills the day up to {DAILY_PLAN_CAPACITY}{" "}items. Done items count toward today&apos;s slots.
             </p>
             <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
               View upcoming
