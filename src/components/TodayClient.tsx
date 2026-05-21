@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { Check, ExternalLink, ListPlus, Plus } from "lucide-react";
 import { getAllProblemTemplates } from "@/lib/problemSets";
-import { isDueOnOrBefore, isDueToday, isOverdue, parseDate } from "@/lib/dates";
+import { isDueOnOrBefore, isDueToday, isOverdue, parseDate, toLocalDateKey } from "@/lib/dates";
 import { formatAttemptResult, formatDateTime } from "@/lib/format";
 import { countUnscheduledNewProblems, isReviewProblem, DAILY_PLAN_CAPACITY } from "@/lib/planning";
+import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
-import { DifficultyBadge, TagPill } from "./Badges";
+import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
 import { ProblemCard } from "./ProblemCard";
@@ -74,6 +75,75 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
   );
 }
 
+function getCompletedDailyAttempts(attempts: Attempt[], today: Date): Attempt[] {
+  const todayKey = toLocalDateKey(today);
+  const latestByProblem = new Map<string, Attempt>();
+  const matchingAttempts = [...attempts]
+    .filter((attempt) => attempt.plannedForDate === todayKey)
+    .sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime());
+
+  for (const attempt of matchingAttempts) {
+    if (latestByProblem.has(attempt.problemId)) {
+      continue;
+    }
+
+    latestByProblem.set(attempt.problemId, attempt);
+  }
+
+  return [...latestByProblem.values()];
+}
+
+function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?: Problem }) {
+  return (
+    <article className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {problem ? (
+              <Link
+                className="text-base font-semibold tracking-normal text-[var(--foreground)] hover:text-[var(--accent-strong)]"
+                href={`/problems/${problem.id}`}
+              >
+                {problem.title}
+              </Link>
+            ) : (
+              <span className="text-base font-semibold tracking-normal">Deleted problem</span>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+              <Check size={12} />
+              Done
+            </span>
+            {problem ? <DifficultyBadge difficulty={problem.difficulty} /> : null}
+            {problem ? <StatusBadge status={problem.status} /> : null}
+          </div>
+          {problem ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {problem.patterns.slice(0, 5).map((tag) => (
+                <TagPill key={tag} tag={tag} />
+              ))}
+            </div>
+          ) : null}
+          <p className="mt-3 text-sm text-[var(--muted)]">
+            {formatAttemptResult(attempt.result)}
+            {attempt.timeMinutes ? ` - ${attempt.timeMinutes} min` : ""} - {formatDateTime(attempt.attemptedAt)}
+          </p>
+        </div>
+        {problem ? (
+          <a
+            className="inline-flex shrink-0 items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
+            href={problem.url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink size={16} />
+            Open
+          </a>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 export function TodayClient() {
   const { data, isTemplateInQueue, ready } = useLeetLoop();
   const today = new Date();
@@ -111,6 +181,38 @@ export function TodayClient() {
     .slice(0, 5);
   const readyCount = overdue.length + dueToday.length + plannedNewToday.length;
   const todayPlan = [...dueToday, ...plannedNewToday];
+  const completedToday = getCompletedDailyAttempts(data.attempts, today);
+  const completedTodayCount = completedToday.length;
+  const dailyPlanTotal = Math.max(DAILY_PLAN_CAPACITY, readyCount + completedTodayCount);
+  const heroText = readyCount
+    ? `${readyCount} of ${dailyPlanTotal} left today`
+    : completedTodayCount
+      ? "Daily plan complete"
+      : "No reviews due today";
+  const heroCopy = (() => {
+    if (completedTodayCount && readyCount) {
+      return `${completedTodayCount} done. Keep clearing the remaining planned work.`;
+    }
+
+    if (completedTodayCount) {
+      return "Nice. Today's planned queue is clear, and completed items stay visible below.";
+    }
+
+    if (overdue.length || dueToday.length) {
+      return "Start with overdue work, then clear today's queue.";
+    }
+
+    if (plannedNewToday.length) {
+      return "No reviews are waiting. Start today's planned new problem.";
+    }
+
+    return "Nice. Add a new problem or pull one from a built-in list.";
+  })();
+  const emptyTodayCopy = completedTodayCount
+    ? "Completed planned work stays visible in Done Today."
+    : futurePlannedNewCount
+      ? "Your new starts are planned for upcoming days."
+      : "Add a new problem or review a weak pattern.";
 
   if (!ready) {
     return <EmptyState title="Loading queue" copy="Local data is loading." />;
@@ -124,15 +226,9 @@ export function TodayClient() {
             Today
           </p>
           <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
-            {readyCount ? `${readyCount} item${readyCount === 1 ? "" : "s"} ready` : "No reviews due today"}
+            {heroText}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-            {overdue.length || dueToday.length
-              ? "Start with overdue work, then clear today's queue."
-              : plannedNewToday.length
-                ? "No reviews are waiting. Start today's planned new problem."
-                : "Nice. Add a new problem or pull one from a built-in list."}
-          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">{heroCopy}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
@@ -153,20 +249,20 @@ export function TodayClient() {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <p className="text-sm text-[var(--muted)]">Overdue</p>
-          <p className="mt-1 text-2xl font-semibold">{overdue.length}</p>
+          <p className="text-sm text-[var(--muted)]">Remaining today</p>
+          <p className="mt-1 text-2xl font-semibold">{readyCount}</p>
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <p className="text-sm text-[var(--muted)]">Due today</p>
-          <p className="mt-1 text-2xl font-semibold">{dueToday.length}</p>
+          <p className="text-sm text-[var(--muted)]">Done today</p>
+          <p className="mt-1 text-2xl font-semibold">{completedTodayCount}</p>
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <p className="text-sm text-[var(--muted)]">New today</p>
+          <p className="text-sm text-[var(--muted)]">Reviews left</p>
+          <p className="mt-1 text-2xl font-semibold">{overdue.length + dueToday.length}</p>
+        </div>
+        <div className="rounded-lg border border-[var(--border)] bg-white p-4">
+          <p className="text-sm text-[var(--muted)]">New left</p>
           <p className="mt-1 text-2xl font-semibold">{plannedNewToday.length}</p>
-        </div>
-        <div className="rounded-lg border border-[var(--border)] bg-white p-4">
-          <p className="text-sm text-[var(--muted)]">Attempts logged</p>
-          <p className="mt-1 text-2xl font-semibold">{data.attempts.length}</p>
         </div>
       </section>
 
@@ -185,21 +281,30 @@ export function TodayClient() {
           todayPlan.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
         ) : (
           <EmptyState
-            title="No work due today"
-            copy={
-              futurePlannedNewCount
-                ? "Your new starts are planned for upcoming days."
-                : "Add a new problem or review a weak pattern."
-            }
+            title={completedTodayCount ? "Daily plan complete" : "No work due today"}
+            copy={emptyTodayCopy}
           />
         )}
       </section>
 
-      {todayPlan.length ? (
+      {completedToday.length ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold tracking-normal">Done Today</h2>
+          {completedToday.map((attempt) => (
+            <CompletedProblemCard
+              attempt={attempt}
+              key={`${attempt.problemId}-${attempt.id}`}
+              problem={data.problems.find((problem) => problem.id === attempt.problemId)}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      {todayPlan.length || completedToday.length ? (
         <section className="rounded-lg border border-[var(--border)] bg-white p-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--muted)]">
-              Reviews plus planned new starts fill the day up to {DAILY_PLAN_CAPACITY} total items.
+              Planned work fills the day up to {DAILY_PLAN_CAPACITY} items. Done items count toward today&apos;s slots.
             </p>
             <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
               View upcoming
@@ -208,7 +313,7 @@ export function TodayClient() {
         </section>
       ) : null}
 
-      {!todayPlan.length && suggestedTemplates.length ? (
+      {!todayPlan.length && !completedToday.length && suggestedTemplates.length ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold tracking-normal">Suggested New</h2>
           {suggestedTemplates.map((template) => (
@@ -217,7 +322,7 @@ export function TodayClient() {
         </section>
       ) : null}
 
-      {!todayPlan.length && !suggestedTemplates.length && unscheduledNewCount ? (
+      {!todayPlan.length && !completedToday.length && !suggestedTemplates.length && unscheduledNewCount ? (
         <EmptyState
           title="Upcoming plan is full"
           copy="More new problems will be scheduled as space opens."

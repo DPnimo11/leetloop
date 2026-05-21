@@ -147,6 +147,7 @@ describe("planNewProblemStarts", () => {
             problemId: loggedProblem?.id ?? "new_0",
             attemptedAt: now.toISOString(),
             result: "solved_clean",
+            plannedForDate: "2026-05-19",
           },
         ],
       ),
@@ -204,6 +205,7 @@ describe("planNewProblemStarts", () => {
             problemId: "review_1",
             attemptedAt: now.toISOString(),
             result: "solved_clean",
+            plannedForDate: "2026-05-19",
           },
         ],
       ),
@@ -233,5 +235,33 @@ describe("planNewProblemStarts", () => {
 
     expect(upcoming[0]?.newStarts.map((item) => item.id)).toEqual(["new_unscheduled"]);
     expect(upcoming[1]?.newStarts.map((item) => item.id)).toEqual(["new_tomorrow"]);
+  });
+
+  it("ignores off-plan attempts when filling today's open capacity", () => {
+    const planned = planNewProblemStarts(
+      data(
+        Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) =>
+          problem({
+            id: `new_${index}`,
+            title: `New ${index}`,
+            createdAt: `2026-05-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+          }),
+        ),
+        [
+          {
+            id: "attempt_1",
+            problemId: "future_review",
+            attemptedAt: now.toISOString(),
+            result: "solved_clean",
+          },
+        ],
+      ),
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now });
+
+    expect(upcoming[0]?.newStarts).toHaveLength(DAILY_PLAN_CAPACITY);
+    expect(upcoming[0]?.completedCount).toBe(0);
+    expect(upcoming[0]?.load).toBe(DAILY_PLAN_CAPACITY);
   });
 });

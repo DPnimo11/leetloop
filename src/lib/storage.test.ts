@@ -83,6 +83,57 @@ describe("storage helpers", () => {
     expect(result.problem.reviewCount).toBe(1);
   });
 
+  it("marks a due problem attempt as completed daily work", () => {
+    const { data, problem } = addProblem(createEmptyData(now), createProblemInputFromTemplate(template), {
+      now,
+      idFactory: () => "problem_1",
+    });
+    const dueProblem = {
+      ...problem,
+      nextReviewAt: "2026-05-18T09:00:00.000Z",
+    };
+
+    const result = logAttempt(
+      {
+        ...data,
+        problems: [dueProblem],
+      },
+      problem.id,
+      {
+        result: "solved_clean",
+      },
+      { now, idFactory: () => "attempt_1" },
+    );
+
+    expect(result.attempt.plannedForDate).toBe("2026-05-18");
+  });
+
+  it("does not mark an off-plan future problem attempt as completed daily work", () => {
+    const { data, problem } = addProblem(createEmptyData(now), createProblemInputFromTemplate(template), {
+      now,
+      idFactory: () => "problem_1",
+    });
+    const futureProblem = {
+      ...problem,
+      status: "reviewing" as const,
+      nextReviewAt: "2026-05-21T12:00:00.000Z",
+    };
+
+    const result = logAttempt(
+      {
+        ...data,
+        problems: [futureProblem],
+      },
+      problem.id,
+      {
+        result: "solved_clean",
+      },
+      { now, idFactory: () => "attempt_1" },
+    );
+
+    expect(result.attempt.plannedForDate).toBeUndefined();
+  });
+
   it("round-trips JSON export/import", () => {
     const { data } = addProblem(createEmptyData(now), createProblemInputFromTemplate(template), {
       now,

@@ -80,9 +80,7 @@ export function getCompletedProblemIdsForDate(data: LeetLoopData, date: Date): S
   const completedIds = new Set<string>();
 
   for (const attempt of data.attempts) {
-    const attemptedAt = parseDate(attempt.attemptedAt);
-
-    if (attemptedAt && toLocalDateKey(attemptedAt) === dateKey) {
+    if (attempt.plannedForDate === dateKey) {
       completedIds.add(attempt.problemId);
     }
   }

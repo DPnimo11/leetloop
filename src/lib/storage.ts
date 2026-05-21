@@ -4,6 +4,7 @@ import type { Problem, ProblemInput } from "@/types/problem";
 import { isDifficulty, isPlatform, isProblemStatus } from "@/types/problem";
 import type { LeetLoopData } from "@/types/storage";
 import { scheduleNextReview } from "./scheduling";
+import { isDueOnOrBefore, toLocalDateKey } from "./dates";
 import { normalizeLeetcodeSlug } from "./problemSets";
 
 export const STORAGE_VERSION = 1;
@@ -157,6 +158,14 @@ export function createAttempt(
   };
 }
 
+function getAttemptPlannedForDate(problem: Problem, attemptedAt: Date): string | undefined {
+  if (problem.status === "retired" || !isDueOnOrBefore(problem.nextReviewAt, attemptedAt)) {
+    return undefined;
+  }
+
+  return toLocalDateKey(attemptedAt);
+}
+
 export function logAttempt(
   data: LeetLoopData,
   problemId: string,
@@ -171,20 +180,22 @@ export function logAttempt(
 
   const attempt = createAttempt(problemId, input, options);
   const attemptedAt = new Date(attempt.attemptedAt);
+  const plannedForDate = getAttemptPlannedForDate(problem, attemptedAt);
+  const countedAttempt: Attempt = plannedForDate ? { ...attempt, plannedForDate } : attempt;
   const scheduledProblem = scheduleNextReview(problem, input.result, attemptedAt);
   const problems = data.problems.map((item) => (item.id === problemId ? scheduledProblem : item));
   const nextData = touchData(
     {
       ...data,
       problems,
-      attempts: [attempt, ...data.attempts],
+      attempts: [countedAttempt, ...data.attempts],
     },
     attemptedAt,
   );
 
   return {
     data: nextData,
-    attempt,
+    attempt: countedAttempt,
     problem: scheduledProblem,
   };
 }
@@ -248,6 +259,7 @@ function normalizeAttempt(value: unknown): Attempt | undefined {
     result: candidate.result,
     timeMinutes: candidate.timeMinutes,
     note: candidate.note,
+    plannedForDate: typeof candidate.plannedForDate === "string" ? candidate.plannedForDate : undefined,
   };
 }
 

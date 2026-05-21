@@ -15,6 +15,7 @@ export type Attempt = {
   result: AttemptResult;
   timeMinutes?: number;
   note?: string;
+  plannedForDate?: string;
 };
 
 export type AttemptInput = {
