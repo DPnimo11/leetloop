@@ -8,10 +8,12 @@
   const OVERLAY_ID = "leetloop-spoiler-overlay";
   const MIN_EDITOR_WIDTH = 260;
   const MIN_EDITOR_HEIGHT = 160;
+  const CONFIRM_RESET_TIMEOUT_MS = 3000;
 
   let overlay;
   let editorTarget;
   let observer;
+  let confirmObserver;
   let unlocked = false;
   let mode = "initial";
 
@@ -58,7 +60,9 @@
     overlay?.remove();
     overlay = undefined;
     observer?.disconnect();
+    confirmObserver?.disconnect();
     observer = undefined;
+    confirmObserver = undefined;
     window.removeEventListener("resize", positionOverlay);
     window.removeEventListener("scroll", positionOverlay, true);
   }
@@ -71,7 +75,12 @@
     element.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, view: window }));
     element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
     element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
-    element.click();
+    if (typeof element.click === "function") {
+      element.click();
+      return;
+    }
+
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
   }
 
   function elementLabel(element) {
@@ -88,28 +97,146 @@
       .trim();
   }
 
+  function isShieldElement(element) {
+    return Boolean(overlay?.contains(element));
+  }
+
   function isVisible(element) {
     const rect = element.getBoundingClientRect();
     const style = window.getComputedStyle(element);
     return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
   }
 
-  function tryClickResetControl() {
+  function visibleActionElements(root) {
+    return Array.from(root.querySelectorAll("button, [role='button'], [role='menuitem'], a")).filter(
+      (candidate) => isVisible(candidate) && !isShieldElement(candidate),
+    );
+  }
+
+  function findTextResetControl() {
     const candidates = Array.from(document.querySelectorAll("button, [role='button'], [role='menuitem'], a"));
-    const resetControl = candidates.find((candidate) => {
-      if (!isVisible(candidate)) {
+    return candidates.find((candidate) => {
+      if (!isVisible(candidate) || isShieldElement(candidate)) {
         return false;
       }
 
       const label = elementLabel(candidate);
       return /reset\s+(to\s+)?default\s+code/i.test(label) || /reset\s+code/i.test(label);
     });
+  }
+
+  function findEditorRoot() {
+    return document.getElementById("editor") ?? editorTarget?.closest("#editor") ?? undefined;
+  }
+
+  function isUnsafeToolbarCandidate(element) {
+    const label = elementLabel(element);
+
+    if (!label || /reset/i.test(label)) {
+      return false;
+    }
+
+    return /\b(run|submit|debug|console|settings|format|layout|fullscreen|language)\b/i.test(label);
+  }
+
+  function findIconResetControl() {
+    const editor = findEditorRoot();
+
+    if (!editor) {
+      return undefined;
+    }
+
+    const toolbarContainers = Array.from(editor.getElementsByClassName("flex items-center gap-1"));
+
+    for (const container of toolbarContainers) {
+      const buttons = visibleActionElements(container).filter((button) => button.tagName === "BUTTON");
+
+      if (buttons.length < 4) {
+        continue;
+      }
+
+      const candidate = buttons[3];
+
+      if (candidate && !isUnsafeToolbarCandidate(candidate)) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  function findResetControl() {
+    return findTextResetControl() ?? findIconResetControl();
+  }
+
+  function findResetConfirmControl() {
+    const dialogs = Array.from(
+      document.querySelectorAll("[role='dialog'], [data-state='open'], .fixed, .modal, .popover"),
+    ).filter((candidate) => isVisible(candidate) && !isShieldElement(candidate));
+    const roots = dialogs.length ? dialogs : [document.body].filter(Boolean);
+
+    for (const root of roots) {
+      const candidates = visibleActionElements(root);
+      const confirm = candidates.find((candidate) => {
+        const label = elementLabel(candidate);
+        return /^(confirm|reset|yes)$/i.test(label) || /reset\s+(code|editor|default)/i.test(label);
+      });
+
+      if (confirm) {
+        return confirm;
+      }
+
+      const greenConfirm = root.querySelector(".text-label-r.bg-green-s");
+
+      if (greenConfirm && isVisible(greenConfirm) && !isShieldElement(greenConfirm)) {
+        return greenConfirm;
+      }
+    }
+
+    return undefined;
+  }
+
+  function tryClickResetConfirm() {
+    const confirmControl = findResetConfirmControl();
+
+    if (!confirmControl) {
+      return false;
+    }
+
+    clickElement(confirmControl);
+    return true;
+  }
+
+  function observeResetConfirm() {
+    confirmObserver?.disconnect();
+
+    const stopAt = Date.now() + CONFIRM_RESET_TIMEOUT_MS;
+
+    confirmObserver = new MutationObserver(() => {
+      if (tryClickResetConfirm() || Date.now() > stopAt) {
+        confirmObserver?.disconnect();
+        confirmObserver = undefined;
+      }
+    });
+
+    confirmObserver.observe(document.body ?? document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(() => {
+      if (tryClickResetConfirm() || confirmObserver) {
+        confirmObserver?.disconnect();
+        confirmObserver = undefined;
+      }
+    }, CONFIRM_RESET_TIMEOUT_MS);
+  }
+
+  function tryClickResetControl() {
+    const resetControl = findResetControl();
 
     if (!resetControl) {
       return false;
     }
 
     clickElement(resetControl);
+    observeResetConfirm();
     return true;
   }
 
