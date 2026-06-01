@@ -1,0 +1,111 @@
+html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) .monaco-editor,
+html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) .cm-editor,
+html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data-cy="code-editor"],
+html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data-testid="code-editor"] {
+  filter: blur(18px) !important;
+  opacity: 0.08 !important;
+}
+
+#leetloop-spoiler-overlay {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-sizing: border-box;
+  color: #101828;
+  display: flex;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 2147483647;
+}
+
+#leetloop-spoiler-overlay.leetloop-floating {
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.24);
+}
+
+#leetloop-spoiler-overlay .leetloop-panel {
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.24);
+  max-width: 440px;
+  padding: 20px;
+  width: min(100%, 440px);
+}
+
+#leetloop-spoiler-overlay .leetloop-kicker {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+#leetloop-spoiler-overlay h2 {
+  color: #101828;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+#leetloop-spoiler-overlay p {
+  color: #475467;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
+
+#leetloop-spoiler-overlay .leetloop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+#leetloop-spoiler-overlay button {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 750;
+  justify-content: center;
+  line-height: 1;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+#leetloop-spoiler-overlay button.leetloop-primary {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+#leetloop-spoiler-overlay button.leetloop-secondary {
+  background: #ffffff;
+  border-color: #d0d5dd;
+  color: #344054;
+}
+
+#leetloop-spoiler-overlay button.leetloop-link {
+  background: transparent;
+  color: #667085;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#leetloop-spoiler-overlay button:hover {
+  filter: brightness(0.96);
+}

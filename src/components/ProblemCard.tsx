@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ExternalLink, History } from "lucide-react";
 import type { Problem } from "@/types/problem";
+import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { formatAttemptResult, formatDate } from "@/lib/format";
 import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { AttemptModal } from "./AttemptModal";
@@ -39,7 +40,7 @@ export function ProblemCard({ problem }: { problem: Problem }) {
         <div className="flex shrink-0 flex-wrap gap-2">
           <a
             className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
-            href={problem.url}
+            href={leetLoopReviewUrl(problem.url)}
             rel="noreferrer"
             target="_blank"
           >

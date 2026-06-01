@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, History, Save, Trash2 } from "lucide-react";
 import { formatAttemptResult, formatDate, formatDateTime, STATUS_LABELS } from "@/lib/format";
+import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { AttemptModal } from "./AttemptModal";
@@ -79,7 +80,7 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
           <div className="flex flex-wrap gap-2">
             <a
               className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
-              href={currentProblem.url}
+              href={leetLoopReviewUrl(currentProblem.url)}
               rel="noreferrer"
               target="_blank"
             >

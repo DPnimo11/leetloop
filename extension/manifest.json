@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "LeetLoop Spoiler Shield",
+  "description": "Hides previous LeetCode editor code when a problem is opened from LeetLoop.",
+  "version": "0.1.0",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://leetcode.com/problems/*",
+        "https://www.leetcode.com/problems/*"
+      ],
+      "css": ["shield.css"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

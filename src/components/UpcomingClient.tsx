@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 import { countUnscheduledNewProblems, DAILY_PLAN_CAPACITY, getUpcomingPlan } from "@/lib/planning";
 import { formatDate } from "@/lib/format";
+import { leetLoopReviewUrl } from "@/lib/leetcode";
 import type { Problem } from "@/types/problem";
 import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
@@ -35,7 +36,7 @@ function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new
         </div>
         <a
           className="text-sm font-semibold text-[var(--accent-strong)] hover:underline"
-          href={problem.url}
+          href={leetLoopReviewUrl(problem.url)}
           rel="noreferrer"
           target="_blank"
         >

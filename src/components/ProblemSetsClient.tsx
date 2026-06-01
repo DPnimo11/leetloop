@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, CheckSquare, ListPlus, Search, Square } from "lucide-react";
 import { BUILT_IN_PROBLEM_SETS } from "@/lib/problemSets";
+import { leetLoopReviewUrl } from "@/lib/leetcode";
 import type { BuiltInProblemSetSlug, ProblemTemplate } from "@/types/problem-set";
 import type { Difficulty } from "@/types/problem";
 import { DIFFICULTIES } from "@/types/problem";
@@ -194,7 +195,7 @@ export function ProblemSetsClient() {
                     ) : null}
                     <a
                       className="text-base font-semibold tracking-normal hover:text-[var(--accent-strong)]"
-                      href={problem.url}
+                      href={leetLoopReviewUrl(problem.url)}
                       rel="noreferrer"
                       target="_blank"
                     >

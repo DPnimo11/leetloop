@@ -5,6 +5,7 @@ import { Check, ExternalLink, ListPlus, Plus } from "lucide-react";
 import { getAllProblemTemplates } from "@/lib/problemSets";
 import { isDueOnOrBefore, isDueToday, isOverdue, parseDate, toLocalDateKey } from "@/lib/dates";
 import { formatAttemptResult, formatDateTime } from "@/lib/format";
+import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { countUnscheduledNewProblems, isReviewProblem, DAILY_PLAN_CAPACITY } from "@/lib/planning";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
@@ -35,7 +36,7 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
           <div className="flex flex-wrap items-center gap-2">
             <a
               className="text-base font-semibold tracking-normal hover:text-[var(--accent-strong)]"
-              href={template.url}
+              href={leetLoopReviewUrl(template.url)}
               rel="noreferrer"
               target="_blank"
             >
@@ -53,7 +54,7 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
         <div className="flex shrink-0 flex-wrap gap-2">
           <a
             className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
-            href={template.url}
+            href={leetLoopReviewUrl(template.url)}
             rel="noreferrer"
             target="_blank"
           >
@@ -131,7 +132,7 @@ function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?
         {problem ? (
           <a
             className="inline-flex shrink-0 items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
-            href={problem.url}
+            href={leetLoopReviewUrl(problem.url)}
             rel="noreferrer"
             target="_blank"
           >
