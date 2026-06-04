@@ -7,6 +7,7 @@ LeetLoop is a lightweight spaced-repetition tracker for LeetCode-style interview
 - Add and manage coding problems.
 - Log attempts with fast result choices.
 - Automatically schedule the next review.
+- Set a daily practice target and add another batch when today's queue is clear.
 - Browse official LeetCode 75 and Top Interview 150 templates.
 - Export/import local data as JSON.
 

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { CalendarDays } from "lucide-react";
-import { countUnscheduledNewProblems, DAILY_PLAN_CAPACITY, getUpcomingPlan } from "@/lib/planning";
+import { countUnscheduledNewProblems, getUpcomingPlan } from "@/lib/planning";
 import { formatDate } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
+import { getDailyTarget } from "@/lib/settings";
 import type { Problem } from "@/types/problem";
 import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
@@ -51,6 +52,7 @@ export function UpcomingClient() {
   const { data, ready } = useLeetLoop();
   const plan = getUpcomingPlan(data);
   const unscheduledNewCount = countUnscheduledNewProblems(data);
+  const dailyTarget = getDailyTarget(data.settings);
 
   if (!ready) {
     return <EmptyState title="Loading upcoming plan" copy="Local data is loading." />;
@@ -66,7 +68,7 @@ export function UpcomingClient() {
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Next 14 days</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Reviews take priority. New starts fill open space up to {DAILY_PLAN_CAPACITY} items per day.
+              Daily target: {dailyTarget}. Reviews take priority; new starts fill open space.
             </p>
           </div>
           <div className="rounded-md bg-[var(--surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--muted)]">

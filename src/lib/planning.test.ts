@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { LeetLoopData } from "@/types/storage";
-import { DAILY_PLAN_CAPACITY, getUpcomingPlan, planNewProblemStarts } from "./planning";
+import { createDefaultSettings } from "./settings";
+import { DAILY_PLAN_CAPACITY, getUpcomingPlan, planNewProblemStarts, refillTodayPlan } from "./planning";
 
 const now = new Date("2026-05-19T12:00:00.000Z");
 
@@ -28,6 +29,7 @@ function data(problems: Problem[], attempts: Attempt[] = []): LeetLoopData {
     version: 1,
     problems,
     attempts,
+    settings: createDefaultSettings(),
     updatedAt: now.toISOString(),
   };
 }
@@ -263,5 +265,55 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[0]?.newStarts).toHaveLength(DAILY_PLAN_CAPACITY);
     expect(upcoming[0]?.completedCount).toBe(0);
     expect(upcoming[0]?.load).toBe(DAILY_PLAN_CAPACITY);
+  });
+
+  it("uses the stored daily target when no override is provided", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data(
+          Array.from({ length: 4 }, (_, index) =>
+            problem({
+              id: `new_${index}`,
+              title: `New ${index}`,
+            }),
+          ),
+        ),
+        settings: {
+          dailyTarget: 2,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now });
+
+    expect(upcoming[0]?.capacity).toBe(2);
+    expect(upcoming[0]?.newStarts).toHaveLength(2);
+    expect(upcoming[1]?.newStarts).toHaveLength(2);
+  });
+
+  it("refills today with another batch after planned work is complete", () => {
+    const completedAttempts: Attempt[] = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) => ({
+      id: `attempt_${index}`,
+      problemId: `done_${index}`,
+      attemptedAt: now.toISOString(),
+      result: "solved_clean",
+      plannedForDate: "2026-05-19",
+    }));
+    const refillCandidates = Array.from({ length: DAILY_PLAN_CAPACITY + 1 }, (_, index) =>
+      problem({
+        id: `new_${index}`,
+        title: `New ${index}`,
+        nextReviewAt: "2026-05-20T12:00:00.000Z",
+      }),
+    );
+    const result = refillTodayPlan(data(refillCandidates, completedAttempts), { now });
+    const upcoming = getUpcomingPlan(result.data, { now });
+
+    expect(result.addedCount).toBe(DAILY_PLAN_CAPACITY);
+    expect(upcoming[0]?.capacity).toBe(DAILY_PLAN_CAPACITY * 2);
+    expect(upcoming[0]?.completedCount).toBe(DAILY_PLAN_CAPACITY);
+    expect(upcoming[0]?.newStarts).toHaveLength(DAILY_PLAN_CAPACITY);
+    expect(upcoming[1]?.newStarts).toHaveLength(1);
   });
 });

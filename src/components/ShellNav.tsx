@@ -10,6 +10,7 @@ const navItems = [
   { href: "/problem-sets", label: "Sets" },
   { href: "/add", label: "Add" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/settings", label: "Settings" },
 ];
 
 function isActivePath(pathname: string, href: string): boolean {

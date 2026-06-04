@@ -13,7 +13,7 @@ import {
 import type { Attempt, AttemptInput } from "@/types/attempt";
 import type { Problem, ProblemInput } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
-import type { LeetLoopData } from "@/types/storage";
+import type { LeetLoopData, LeetLoopSettings } from "@/types/storage";
 import {
   addProblem as addProblemToData,
   createEmptyData,
@@ -24,13 +24,14 @@ import {
   logAttempt as logAttemptToData,
   saveData,
   updateProblem as updateProblemInData,
+  updateSettings as updateSettingsInData,
 } from "@/lib/storage";
 import {
   createProblemInputFromTemplate,
   getProblemLeetcodeSlug,
   isTemplateAdded,
 } from "@/lib/problemSets";
-import { planNewProblemStarts } from "@/lib/planning";
+import { planNewProblemStarts, refillTodayPlan } from "@/lib/planning";
 
 type AddTemplateResult = {
   added: boolean;
@@ -44,8 +45,10 @@ type LeetLoopContextValue = {
   addProblem: (input: ProblemInput) => Problem;
   addProblemFromTemplate: (template: ProblemTemplate) => AddTemplateResult;
   updateProblem: (problemId: string, updates: Partial<ProblemInput>) => void;
+  updateSettings: (updates: Partial<LeetLoopSettings>) => void;
   deleteProblem: (problemId: string) => void;
   logAttempt: (problemId: string, input: AttemptInput) => Attempt;
+  repopulateToday: () => number;
   exportJson: () => string;
   importJson: (raw: string) => LeetLoopData;
   getProblemAttempts: (problemId: string) => Attempt[];
@@ -123,6 +126,13 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
     }));
   }, [commit]);
 
+  const updateSettings = useCallback((updates: Partial<LeetLoopSettings>) => {
+    commit<void>((current) => ({
+      data: updateSettingsInData(current, updates),
+      result: undefined,
+    }));
+  }, [commit]);
+
   const deleteProblem = useCallback((problemId: string) => {
     commit<void>((current) => ({
       data: deleteProblemFromData(current, problemId),
@@ -136,6 +146,17 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       return {
         data: next.data,
         result: next.attempt,
+      };
+    });
+  }, [commit]);
+
+  const repopulateToday = useCallback(() => {
+    return commit<number>((current) => {
+      const next = refillTodayPlan(current);
+
+      return {
+        data: next.data,
+        result: next.addedCount,
       };
     });
   }, [commit]);
@@ -171,8 +192,10 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       addProblem,
       addProblemFromTemplate,
       updateProblem,
+      updateSettings,
       deleteProblem,
       logAttempt,
+      repopulateToday,
       exportJson,
       importJson,
       getProblemAttempts,
@@ -189,8 +212,10 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       isTemplateInQueue,
       loadError,
       logAttempt,
+      repopulateToday,
       ready,
       updateProblem,
+      updateSettings,
     ],
   );
 

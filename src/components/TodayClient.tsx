@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Check, ExternalLink, ListPlus, Plus } from "lucide-react";
+import { useState } from "react";
+import { Check, ExternalLink, ListPlus, Plus, RefreshCw } from "lucide-react";
 import { getAllProblemTemplates } from "@/lib/problemSets";
 import { isDueOnOrBefore, isDueToday, isOverdue, parseDate, toLocalDateKey } from "@/lib/dates";
 import { formatAttemptResult, formatDateTime } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
-import { countUnscheduledNewProblems, isReviewProblem, DAILY_PLAN_CAPACITY } from "@/lib/planning";
+import { countRefillCandidateProblems, countUnscheduledNewProblems, isReviewProblem } from "@/lib/planning";
+import { getDailyCapacityForDate } from "@/lib/settings";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
@@ -146,8 +148,10 @@ function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?
 }
 
 export function TodayClient() {
-  const { data, isTemplateInQueue, ready } = useLeetLoop();
+  const { data, isTemplateInQueue, ready, repopulateToday } = useLeetLoop();
+  const [refillMessage, setRefillMessage] = useState("");
   const today = new Date();
+  const dailyCapacity = getDailyCapacityForDate(data, today);
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const reviewProblems = activeProblems.filter(isReviewProblem);
   const overdue = sortByReviewDate(reviewProblems.filter((problem) => isOverdue(problem.nextReviewAt, today)));
@@ -184,7 +188,9 @@ export function TodayClient() {
   const todayPlan = [...dueToday, ...plannedNewToday];
   const completedToday = getCompletedDailyAttempts(data.attempts, today);
   const completedTodayCount = completedToday.length;
-  const dailyPlanTotal = Math.max(DAILY_PLAN_CAPACITY, readyCount + completedTodayCount);
+  const refillCandidateCount = countRefillCandidateProblems(data, today);
+  const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
+  const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
   const heroText = readyCount
     ? `${readyCount} of ${dailyPlanTotal} left today`
     : completedTodayCount
@@ -219,6 +225,15 @@ export function TodayClient() {
     return <EmptyState title="Loading queue" copy="Local data is loading." />;
   }
 
+  function addMoreToday() {
+    const addedCount = repopulateToday();
+    setRefillMessage(
+      addedCount
+        ? `Added ${addedCount} more to today.`
+        : "No queued new problems are available.",
+    );
+  }
+
   return (
     <div className="space-y-6">
       <section className="flex flex-col gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 sm:flex-row sm:items-end sm:justify-between">
@@ -232,8 +247,18 @@ export function TodayClient() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">{heroCopy}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canRefillToday ? (
+            <button
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
+              onClick={addMoreToday}
+              type="button"
+            >
+              <RefreshCw size={16} />
+              Add more today
+            </button>
+          ) : null}
           <Link
-            className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
             href="/add"
           >
             <Plus size={16} />
@@ -246,6 +271,9 @@ export function TodayClient() {
             Browse sets
           </Link>
         </div>
+        {refillMessage ? (
+          <p className="text-sm font-medium text-emerald-700 sm:basis-full">{refillMessage}</p>
+        ) : null}
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -305,7 +333,7 @@ export function TodayClient() {
         <section className="rounded-lg border border-[var(--border)] bg-white p-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--muted)]">
-              Planned work fills the day up to {DAILY_PLAN_CAPACITY}{" "}items. Done items count toward today&apos;s slots.
+              Planned work fills the day up to {dailyCapacity} items. Done items count toward today&apos;s slots.
             </p>
             <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
               View upcoming

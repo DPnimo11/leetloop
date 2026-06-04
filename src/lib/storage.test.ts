@@ -7,6 +7,7 @@ import {
   importData,
   loadData,
   logAttempt,
+  parseLeetLoopData,
   saveData,
 } from "./storage";
 import type { ProblemTemplate } from "@/types/problem-set";
@@ -57,6 +58,7 @@ describe("storage helpers", () => {
     expect(loaded.problems).toHaveLength(1);
     expect(loaded.problems[0]?.title).toBe("Two Sum");
     expect(loaded.problems[0]?.leetcodeSlug).toBe("two-sum");
+    expect(loaded.settings.dailyTarget).toBe(5);
   });
 
   it("logs attempts and updates the linked problem schedule", () => {
@@ -143,6 +145,47 @@ describe("storage helpers", () => {
     const imported = importData(exportData(data));
 
     expect(imported).toEqual(data);
+  });
+
+  it("adds default settings when parsing older backups", () => {
+    const parsed = parseLeetLoopData(
+      JSON.stringify({
+        version: 1,
+        problems: [],
+        attempts: [],
+        updatedAt: now.toISOString(),
+      }),
+    );
+
+    expect(parsed.settings).toEqual({
+      dailyTarget: 5,
+      extraDailyCapacity: {},
+    });
+  });
+
+  it("normalizes saved settings", () => {
+    const parsed = parseLeetLoopData(
+      JSON.stringify({
+        version: 1,
+        problems: [],
+        attempts: [],
+        settings: {
+          dailyTarget: 99,
+          extraDailyCapacity: {
+            "2026-05-18": 3,
+            nope: 4,
+          },
+        },
+        updatedAt: now.toISOString(),
+      }),
+    );
+
+    expect(parsed.settings).toEqual({
+      dailyTarget: 20,
+      extraDailyCapacity: {
+        "2026-05-18": 3,
+      },
+    });
   });
 
   it("detects template duplicates by LeetCode slug", () => {

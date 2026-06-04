@@ -6,6 +6,7 @@ import type { LeetLoopData } from "@/types/storage";
 import { scheduleNextReview } from "./scheduling";
 import { isDueOnOrBefore, toLocalDateKey } from "./dates";
 import { normalizeLeetcodeSlug } from "./problemSets";
+import { createDefaultSettings, normalizeSettings, updateSettings as updateSettingsInData } from "./settings";
 
 export const STORAGE_VERSION = 1;
 export const STORAGE_KEY = "leetloop:data:v1";
@@ -24,6 +25,7 @@ export function createEmptyData(now = new Date()): LeetLoopData {
     version: STORAGE_VERSION,
     problems: [],
     attempts: [],
+    settings: createDefaultSettings(),
     updatedAt: now.toISOString(),
   };
 }
@@ -139,6 +141,14 @@ export function deleteProblem(data: LeetLoopData, problemId: string, now = new D
     },
     now,
   );
+}
+
+export function updateSettings(
+  data: LeetLoopData,
+  updates: Parameters<typeof updateSettingsInData>[1],
+  now = new Date(),
+): LeetLoopData {
+  return updateSettingsInData(data, updates, now);
 }
 
 export function createAttempt(
@@ -278,6 +288,7 @@ export function parseLeetLoopData(raw: string): LeetLoopData {
     attempts: Array.isArray(parsed.attempts)
       ? parsed.attempts.map(normalizeAttempt).filter((attempt): attempt is Attempt => Boolean(attempt))
       : [],
+    settings: normalizeSettings(parsed.settings),
     updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
   };
 }
