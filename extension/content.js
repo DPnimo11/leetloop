@@ -9,11 +9,17 @@
   const MIN_EDITOR_WIDTH = 260;
   const MIN_EDITOR_HEIGHT = 160;
   const CONFIRM_RESET_TIMEOUT_MS = 3000;
+  const POSITION_RETRY_DURATION_MS = 4000;
+  const POSITION_RETRY_INTERVAL_MS = 120;
 
   let overlay;
   let editorTarget;
   let observer;
+  let editorResizeObserver;
+  let observedEditorTarget;
   let confirmObserver;
+  let positionFrame;
+  let positionRetryTimer;
   let unlocked = false;
   let mode = "initial";
 
@@ -60,11 +66,23 @@
     overlay?.remove();
     overlay = undefined;
     observer?.disconnect();
+    editorResizeObserver?.disconnect();
     confirmObserver?.disconnect();
     observer = undefined;
+    editorResizeObserver = undefined;
+    observedEditorTarget = undefined;
     confirmObserver = undefined;
-    window.removeEventListener("resize", positionOverlay);
-    window.removeEventListener("scroll", positionOverlay, true);
+    editorTarget = undefined;
+    if (positionFrame) {
+      window.cancelAnimationFrame(positionFrame);
+      positionFrame = undefined;
+    }
+    window.clearTimeout(positionRetryTimer);
+    positionRetryTimer = undefined;
+    window.removeEventListener("resize", queuePositionOverlay);
+    window.removeEventListener("scroll", queuePositionOverlay, true);
+    window.visualViewport?.removeEventListener("resize", queuePositionOverlay);
+    window.visualViewport?.removeEventListener("scroll", queuePositionOverlay);
   }
 
   function unlock() {
@@ -105,6 +123,22 @@
     const rect = element.getBoundingClientRect();
     const style = window.getComputedStyle(element);
     return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+  }
+
+  function isUsableEditorTarget(element) {
+    if (!element?.isConnected || !isVisible(element)) {
+      return false;
+    }
+
+    const rect = element.getBoundingClientRect();
+    return (
+      rect.width >= MIN_EDITOR_WIDTH &&
+      rect.height >= MIN_EDITOR_HEIGHT &&
+      rect.right > 0 &&
+      rect.bottom > 0 &&
+      rect.left < window.innerWidth &&
+      rect.top < window.innerHeight
+    );
   }
 
   function visibleActionElements(root) {
@@ -339,7 +373,7 @@
     panel.append(kicker, title, body, actions);
     overlay.appendChild(panel);
 
-    positionOverlay();
+    queuePositionOverlay();
   }
 
   function findEditorTarget() {
@@ -366,28 +400,88 @@
     return undefined;
   }
 
+  function observeEditorTarget(target) {
+    if (!("ResizeObserver" in window) || observedEditorTarget === target) {
+      return;
+    }
+
+    editorResizeObserver?.disconnect();
+    editorResizeObserver = new ResizeObserver(queuePositionOverlay);
+    editorResizeObserver.observe(target);
+    observedEditorTarget = target;
+  }
+
+  function setFloatingOverlay() {
+    editorTarget = undefined;
+    editorResizeObserver?.disconnect();
+    observedEditorTarget = undefined;
+    overlay.classList.add("leetloop-floating");
+    overlay.style.top = "88px";
+    overlay.style.right = "24px";
+    overlay.style.left = "auto";
+    overlay.style.width = "min(420px, calc(100vw - 48px))";
+    overlay.style.height = "auto";
+  }
+
+  function queuePositionOverlay() {
+    if (positionFrame) {
+      return;
+    }
+
+    positionFrame = window.requestAnimationFrame(() => {
+      positionFrame = undefined;
+      positionOverlay();
+    });
+  }
+
+  function retryPositioningUntilSettled() {
+    const stopAt = Date.now() + POSITION_RETRY_DURATION_MS;
+
+    window.clearTimeout(positionRetryTimer);
+
+    function retry() {
+      queuePositionOverlay();
+
+      if (overlay && Date.now() < stopAt) {
+        positionRetryTimer = window.setTimeout(retry, POSITION_RETRY_INTERVAL_MS);
+        return;
+      }
+
+      positionRetryTimer = undefined;
+    }
+
+    retry();
+  }
+
   function positionOverlay() {
     if (!overlay) {
       return;
     }
 
-    editorTarget = findEditorTarget() ?? editorTarget;
+    const nextTarget = findEditorTarget();
+    editorTarget = isUsableEditorTarget(nextTarget)
+      ? nextTarget
+      : isUsableEditorTarget(editorTarget)
+        ? editorTarget
+        : undefined;
 
     if (!editorTarget) {
-      overlay.classList.add("leetloop-floating");
-      overlay.style.top = "88px";
-      overlay.style.right = "24px";
-      overlay.style.left = "auto";
-      overlay.style.width = "min(420px, calc(100vw - 48px))";
-      overlay.style.height = "auto";
+      setFloatingOverlay();
       return;
     }
 
     const rect = editorTarget.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
     const left = Math.max(8, rect.left);
     const top = Math.max(8, rect.top);
-    const width = Math.max(Math.min(rect.width, window.innerWidth - left - 8), MIN_EDITOR_WIDTH);
-    const height = Math.max(Math.min(rect.height, window.innerHeight - top - 8), MIN_EDITOR_HEIGHT);
+    const width = Math.min(Math.max(rect.width, MIN_EDITOR_WIDTH), viewportWidth - left - 8);
+    const height = Math.min(Math.max(rect.height, MIN_EDITOR_HEIGHT), viewportHeight - top - 8);
+
+    if (width < MIN_EDITOR_WIDTH || height < MIN_EDITOR_HEIGHT) {
+      setFloatingOverlay();
+      return;
+    }
 
     overlay.classList.remove("leetloop-floating");
     overlay.style.left = `${left}px`;
@@ -395,6 +489,7 @@
     overlay.style.right = "auto";
     overlay.style.width = `${width}px`;
     overlay.style.height = `${height}px`;
+    observeEditorTarget(editorTarget);
   }
 
   function startObserver() {
@@ -403,17 +498,18 @@
     }
 
     observer = new MutationObserver(() => {
-      window.requestAnimationFrame(() => {
-        if (!overlay) {
-          renderOverlay();
-        }
-        positionOverlay();
-      });
+      if (!overlay) {
+        renderOverlay();
+      }
+      queuePositionOverlay();
     });
 
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    window.addEventListener("resize", positionOverlay);
-    window.addEventListener("scroll", positionOverlay, true);
+    window.addEventListener("resize", queuePositionOverlay);
+    window.addEventListener("scroll", queuePositionOverlay, true);
+    window.visualViewport?.addEventListener("resize", queuePositionOverlay);
+    window.visualViewport?.addEventListener("scroll", queuePositionOverlay);
+    retryPositioningUntilSettled();
   }
 
   function activate() {
