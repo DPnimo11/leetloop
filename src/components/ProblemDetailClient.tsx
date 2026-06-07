@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ExternalLink, History, Save, Trash2 } from "lucide-react";
 import { formatAttemptResult, formatDate, formatDateTime, STATUS_LABELS } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
+import { getProblemSetName } from "@/lib/problemSets";
 import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { AttemptModal } from "./AttemptModal";
@@ -36,10 +37,7 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
 
   const currentProblem = problem;
   const noteValue = notesDraft?.problemId === currentProblem.id ? notesDraft.value : (currentProblem.notes ?? "");
-  const sourceSets =
-    currentProblem.sourceSetSlugs?.map((slug) =>
-      slug === "leetcode-75" ? "LeetCode 75" : "Top Interview 150",
-    ) ?? [];
+  const sourceSets = currentProblem.sourceSetSlugs?.map(getProblemSetName) ?? [];
 
   function saveNotes() {
     updateProblem(currentProblem.id, { notes: noteValue });

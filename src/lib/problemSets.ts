@@ -18,6 +18,7 @@ export type RawProblemSetEntry = readonly [
   title: string,
   difficulty: "EASY" | "MEDIUM" | "HARD",
   topicTags: string,
+  neetcodeSlug?: string,
 ];
 
 export const BUILT_IN_PROBLEM_SET_META: Omit<ProblemSet, "problems">[] = [
@@ -32,6 +33,12 @@ export const BUILT_IN_PROBLEM_SET_META: Omit<ProblemSet, "problems">[] = [
     name: "Top Interview 150",
     description: "Official LeetCode list of 150 classic interview questions.",
     sourceUrl: "https://leetcode.com/studyplan/top-interview-150/",
+  },
+  {
+    slug: "neetcode-150",
+    name: "NeetCode 150",
+    description: "Curated NeetCode list organized by interview problem pattern.",
+    sourceUrl: "https://neetcode.io/practice/practice/neetcode150",
   },
 ];
 
@@ -57,8 +64,31 @@ function getSetMembershipsBySlug(): Map<string, BuiltInProblemSetSlug[]> {
 
 const SET_MEMBERSHIPS_BY_SLUG = getSetMembershipsBySlug();
 
+function getNeetcodeSlugAliases(): Map<string, string> {
+  const aliases = new Map<string, string>();
+
+  for (const [, , , titleSlug, , , , neetcodeSlug] of RAW_PROBLEM_SET_ENTRIES) {
+    if (neetcodeSlug) {
+      aliases.set(neetcodeSlug, titleSlug);
+    }
+  }
+
+  return aliases;
+}
+
+const NEETCODE_SLUG_ALIASES = getNeetcodeSlugAliases();
+
+function normalizeSlug(value: string): string {
+  return value.trim().replace(/^\/+/, "").replace(/\/+$/, "").toLowerCase();
+}
+
+function canonicalizeLeetcodeSlug(slug: string): string {
+  const normalized = normalizeSlug(slug);
+  return NEETCODE_SLUG_ALIASES.get(normalized) ?? normalized;
+}
+
 function createTemplateFromEntry(entry: RawProblemSetEntry): ProblemTemplate {
-  const [setSlug, sourceGroup, questionFrontendId, titleSlug, title, difficulty, topicTags] = entry;
+  const [setSlug, sourceGroup, questionFrontendId, titleSlug, title, difficulty, topicTags, neetcodeSlug] = entry;
 
   return {
     id: `${setSlug}:${titleSlug}`,
@@ -71,6 +101,7 @@ function createTemplateFromEntry(entry: RawProblemSetEntry): ProblemTemplate {
     sourceSetSlugs: SET_MEMBERSHIPS_BY_SLUG.get(titleSlug) ?? [setSlug],
     sourceGroups: [sourceGroup],
     questionFrontendId,
+    neetcodeSlug,
   };
 }
 
@@ -92,13 +123,22 @@ export function normalizeLeetcodeSlug(value?: string): string | undefined {
 
   try {
     const url = new URL(trimmed);
-    const match = url.pathname.match(/\/problems\/([^/]+)/);
-    return match?.[1]?.toLowerCase();
+    const hostname = url.hostname.toLowerCase();
+    const leetcodeMatch = url.pathname.match(/\/problems\/([^/]+)/);
+    const neetcodeMatch =
+      hostname === "neetcode.io" || hostname === "www.neetcode.io"
+        ? url.pathname.match(/\/(?:problems|solutions)\/([^/]+)/)
+        : undefined;
+    const match = neetcodeMatch ?? leetcodeMatch;
+
+    return match?.[1] ? canonicalizeLeetcodeSlug(match[1]) : undefined;
   } catch {
-    return trimmed
-      .replace(/^\/?problems\//, "")
-      .replace(/\/$/, "")
-      .toLowerCase();
+    const slug = trimmed
+      .replace(/^\/?(?:problems|solutions)\//, "")
+      .replace(/\/question\/?$/, "")
+      .replace(/\/$/, "");
+
+    return canonicalizeLeetcodeSlug(slug);
   }
 }
 
@@ -125,6 +165,10 @@ export function createProblemInputFromTemplate(template: ProblemTemplate): Probl
 
 export function getProblemSetBySlug(slug: BuiltInProblemSetSlug): ProblemSet | undefined {
   return BUILT_IN_PROBLEM_SETS.find((set) => set.slug === slug);
+}
+
+export function getProblemSetName(slug: string): string {
+  return BUILT_IN_PROBLEM_SET_META.find((set) => set.slug === slug)?.name ?? slug;
 }
 
 export function getAllProblemTemplates(): ProblemTemplate[] {

@@ -80,7 +80,7 @@ export function ProblemSetsClient() {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {BUILT_IN_PROBLEM_SETS.map((set) => {
           const addedCount = set.problems.filter(isTemplateInQueue).length;
           const active = activeSet.slug === set.slug;

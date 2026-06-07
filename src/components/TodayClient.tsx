@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Check, ExternalLink, ListPlus, Plus, RefreshCw } from "lucide-react";
-import { getAllProblemTemplates } from "@/lib/problemSets";
+import { getAllProblemTemplates, getProblemSetName } from "@/lib/problemSets";
 import { isDueOnOrBefore, isDueToday, isOverdue, parseDate, toLocalDateKey } from "@/lib/dates";
 import { formatAttemptResult, formatDateTime } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
@@ -27,9 +27,7 @@ function sortByReviewDate(problems: Problem[]): Problem[] {
 
 function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
   const { addProblemFromTemplate, ready } = useLeetLoop();
-  const sourceLabel = template.sourceSetSlugs
-    .map((slug) => (slug === "leetcode-75" ? "LeetCode 75" : "Top Interview 150"))
-    .join(", ");
+  const sourceLabel = template.sourceSetSlugs.map(getProblemSetName).join(", ");
 
   return (
     <article className="rounded-lg border border-[var(--border)] bg-white p-4">

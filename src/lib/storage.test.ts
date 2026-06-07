@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createProblemInputFromTemplate, isTemplateAdded, leetcodeProblemUrl } from "./problemSets";
+import {
+  createProblemInputFromTemplate,
+  getProblemSetBySlug,
+  isTemplateAdded,
+  leetcodeProblemUrl,
+} from "./problemSets";
 import {
   addProblem,
+  addProblemFromTemplate,
   createEmptyData,
   exportData,
   importData,
@@ -195,5 +201,45 @@ describe("storage helpers", () => {
     });
 
     expect(isTemplateAdded(template, data.problems)).toBe(true);
+  });
+
+  it("does not overwrite reviews when importing an existing problem from another template", () => {
+    const topInterviewTwoSum = getProblemSetBySlug("top-interview-150")?.problems.find(
+      (problem) => problem.titleSlug === "two-sum",
+    );
+    const neetcodeTwoSum = getProblemSetBySlug("neetcode-150")?.problems.find(
+      (problem) => problem.titleSlug === "two-sum",
+    );
+
+    if (!topInterviewTwoSum || !neetcodeTwoSum) {
+      throw new Error("Two Sum templates missing.");
+    }
+
+    const created = addProblem(createEmptyData(now), createProblemInputFromTemplate(topInterviewTwoSum), {
+      now,
+      idFactory: () => "problem_1",
+    });
+    const reviewed = logAttempt(
+      created.data,
+      created.problem.id,
+      {
+        result: "solved_clean",
+        timeMinutes: 10,
+      },
+      { now, idFactory: () => "attempt_1" },
+    );
+    const imported = addProblemFromTemplate(reviewed.data, neetcodeTwoSum, {
+      now,
+      idFactory: () => "problem_2",
+    });
+
+    expect(imported.added).toBe(false);
+    expect(imported.data).toBe(reviewed.data);
+    expect(imported.data.problems).toHaveLength(1);
+    expect(imported.data.attempts).toHaveLength(1);
+    expect(imported.problem.id).toBe(created.problem.id);
+    expect(imported.problem.reviewCount).toBe(reviewed.problem.reviewCount);
+    expect(imported.problem.nextReviewAt).toBe(reviewed.problem.nextReviewAt);
+    expect(imported.problem.lastResult).toBe(reviewed.problem.lastResult);
   });
 });

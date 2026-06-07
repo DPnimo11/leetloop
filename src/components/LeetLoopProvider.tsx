@@ -16,6 +16,7 @@ import type { ProblemTemplate } from "@/types/problem-set";
 import type { LeetLoopData, LeetLoopSettings } from "@/types/storage";
 import {
   addProblem as addProblemToData,
+  addProblemFromTemplate as addProblemFromTemplateToData,
   createEmptyData,
   deleteProblem as deleteProblemFromData,
   exportData as exportDataFromStorage,
@@ -26,11 +27,7 @@ import {
   updateProblem as updateProblemInData,
   updateSettings as updateSettingsInData,
 } from "@/lib/storage";
-import {
-  createProblemInputFromTemplate,
-  getProblemLeetcodeSlug,
-  isTemplateAdded,
-} from "@/lib/problemSets";
+import { isTemplateAdded } from "@/lib/problemSets";
 import { planNewProblemStarts, refillTodayPlan } from "@/lib/planning";
 
 type AddTemplateResult = {
@@ -82,6 +79,11 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback(<T,>(updater: (current: LeetLoopData) => { data: LeetLoopData; result: T }) => {
     const next = updater(dataRef.current);
+
+    if (next.data === dataRef.current) {
+      return next.result;
+    }
+
     const savedData = saveData(planNewProblemStarts(next.data));
     dataRef.current = savedData;
     setData(savedData);
@@ -100,21 +102,11 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
   const addProblemFromTemplate = useCallback((template: ProblemTemplate): AddTemplateResult => {
     return commit<AddTemplateResult>((current) => {
-      const existing = current.problems.find(
-        (problem) => getProblemLeetcodeSlug(problem) === template.titleSlug,
-      );
+      const next = addProblemFromTemplateToData(current, template);
 
-      if (existing) {
-        return {
-          data: current,
-          result: { added: false, problem: existing },
-        };
-      }
-
-      const next = addProblemToData(current, createProblemInputFromTemplate(template));
       return {
         data: next.data,
-        result: { added: true, problem: next.problem },
+        result: { added: next.added, problem: next.problem },
       };
     });
   }, [commit]);

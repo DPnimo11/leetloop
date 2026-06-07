@@ -2,10 +2,11 @@ import type { Attempt, AttemptInput } from "@/types/attempt";
 import { isAttemptResult } from "@/types/attempt";
 import type { Problem, ProblemInput } from "@/types/problem";
 import { isDifficulty, isPlatform, isProblemStatus } from "@/types/problem";
+import type { ProblemTemplate } from "@/types/problem-set";
 import type { LeetLoopData } from "@/types/storage";
 import { scheduleNextReview } from "./scheduling";
 import { isDueOnOrBefore, toLocalDateKey } from "./dates";
-import { normalizeLeetcodeSlug } from "./problemSets";
+import { createProblemInputFromTemplate, getProblemLeetcodeSlug, normalizeLeetcodeSlug } from "./problemSets";
 import { createDefaultSettings, normalizeSettings, updateSettings as updateSettingsInData } from "./settings";
 
 export const STORAGE_VERSION = 1;
@@ -98,6 +99,29 @@ export function addProblem(
   );
 
   return { data: nextData, problem };
+}
+
+export function addProblemFromTemplate(
+  data: LeetLoopData,
+  template: ProblemTemplate,
+  options: MutationOptions = {},
+): { data: LeetLoopData; problem: Problem; added: boolean } {
+  const existing = data.problems.find((problem) => getProblemLeetcodeSlug(problem) === template.titleSlug);
+
+  if (existing) {
+    return {
+      data,
+      problem: existing,
+      added: false,
+    };
+  }
+
+  const next = addProblem(data, createProblemInputFromTemplate(template), options);
+
+  return {
+    ...next,
+    added: true,
+  };
 }
 
 export function updateProblem(
