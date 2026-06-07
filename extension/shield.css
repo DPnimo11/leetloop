@@ -24,12 +24,15 @@ html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data
   justify-content: center;
   padding: 20px;
   position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  width: 100vw;
   z-index: 2147483647;
 }
 
-#leetloop-spoiler-overlay.leetloop-floating {
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.24);
+#leetloop-spoiler-overlay[hidden] {
+  display: none !important;
 }
 
 #leetloop-spoiler-overlay .leetloop-panel {

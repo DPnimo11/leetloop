@@ -11,6 +11,8 @@
   const CONFIRM_RESET_TIMEOUT_MS = 3000;
   const POSITION_RETRY_DURATION_MS = 4000;
   const POSITION_RETRY_INTERVAL_MS = 120;
+  const STABLE_POSITION_FRAMES = 2;
+  const STABLE_POSITION_TOLERANCE_PX = 2;
 
   let overlay;
   let editorTarget;
@@ -20,6 +22,9 @@
   let confirmObserver;
   let positionFrame;
   let positionRetryTimer;
+  let pendingEditorTarget;
+  let pendingEditorRect;
+  let stablePositionFrames = 0;
   let unlocked = false;
   let mode = "initial";
 
@@ -73,6 +78,7 @@
     observedEditorTarget = undefined;
     confirmObserver = undefined;
     editorTarget = undefined;
+    resetStablePosition();
     if (positionFrame) {
       window.cancelAnimationFrame(positionFrame);
       positionFrame = undefined;
@@ -139,6 +145,45 @@
       rect.left < window.innerWidth &&
       rect.top < window.innerHeight
     );
+  }
+
+  function rectSnapshot(rect) {
+    return {
+      height: rect.height,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+    };
+  }
+
+  function areRectsClose(first, second) {
+    return (
+      Math.abs(first.height - second.height) <= STABLE_POSITION_TOLERANCE_PX &&
+      Math.abs(first.left - second.left) <= STABLE_POSITION_TOLERANCE_PX &&
+      Math.abs(first.top - second.top) <= STABLE_POSITION_TOLERANCE_PX &&
+      Math.abs(first.width - second.width) <= STABLE_POSITION_TOLERANCE_PX
+    );
+  }
+
+  function resetStablePosition() {
+    pendingEditorTarget = undefined;
+    pendingEditorRect = undefined;
+    stablePositionFrames = 0;
+  }
+
+  function hasStablePosition(target, rect) {
+    const nextRect = rectSnapshot(rect);
+
+    if (pendingEditorTarget === target && pendingEditorRect && areRectsClose(pendingEditorRect, nextRect)) {
+      stablePositionFrames += 1;
+      pendingEditorRect = nextRect;
+      return stablePositionFrames >= STABLE_POSITION_FRAMES;
+    }
+
+    pendingEditorTarget = target;
+    pendingEditorRect = nextRect;
+    stablePositionFrames = 1;
+    return false;
   }
 
   function visibleActionElements(root) {
@@ -326,6 +371,7 @@
     if (!overlay) {
       overlay = document.createElement("div");
       overlay.id = OVERLAY_ID;
+      overlay.hidden = true;
       document.documentElement.appendChild(overlay);
     }
 
@@ -411,16 +457,11 @@
     observedEditorTarget = target;
   }
 
-  function setFloatingOverlay() {
+  function hideOverlayUntilAnchored() {
     editorTarget = undefined;
     editorResizeObserver?.disconnect();
     observedEditorTarget = undefined;
-    overlay.classList.add("leetloop-floating");
-    overlay.style.top = "88px";
-    overlay.style.right = "24px";
-    overlay.style.left = "auto";
-    overlay.style.width = "min(420px, calc(100vw - 48px))";
-    overlay.style.height = "auto";
+    overlay.hidden = true;
   }
 
   function queuePositionOverlay() {
@@ -466,11 +507,18 @@
         : undefined;
 
     if (!editorTarget) {
-      setFloatingOverlay();
+      resetStablePosition();
+      hideOverlayUntilAnchored();
       return;
     }
 
     const rect = editorTarget.getBoundingClientRect();
+
+    if (overlay.hidden && !hasStablePosition(editorTarget, rect)) {
+      hideOverlayUntilAnchored();
+      return;
+    }
+
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const left = Math.max(8, rect.left);
@@ -479,16 +527,17 @@
     const height = Math.min(Math.max(rect.height, MIN_EDITOR_HEIGHT), viewportHeight - top - 8);
 
     if (width < MIN_EDITOR_WIDTH || height < MIN_EDITOR_HEIGHT) {
-      setFloatingOverlay();
+      resetStablePosition();
+      hideOverlayUntilAnchored();
       return;
     }
 
-    overlay.classList.remove("leetloop-floating");
     overlay.style.left = `${left}px`;
     overlay.style.top = `${top}px`;
     overlay.style.right = "auto";
     overlay.style.width = `${width}px`;
     overlay.style.height = `${height}px`;
+    overlay.hidden = false;
     observeEditorTarget(editorTarget);
   }
 
