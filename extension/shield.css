@@ -70,6 +70,12 @@ html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data
   margin: 10px 0 0;
 }
 
+#leetloop-spoiler-overlay .leetloop-hint {
+  color: #667085;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
 #leetloop-spoiler-overlay .leetloop-actions {
   display: flex;
   flex-wrap: wrap;
@@ -91,6 +97,11 @@ html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data
   padding: 0 12px;
 }
 
+#leetloop-spoiler-overlay button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
 #leetloop-spoiler-overlay button.leetloop-primary {
   background: #0f766e;
   color: #ffffff;
@@ -109,6 +120,6 @@ html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data
   padding-right: 4px;
 }
 
-#leetloop-spoiler-overlay button:hover {
+#leetloop-spoiler-overlay button:not(:disabled):hover {
   filter: brightness(0.96);
 }

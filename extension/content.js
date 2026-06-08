@@ -13,8 +13,10 @@
   const POSITION_RETRY_INTERVAL_MS = 120;
   const STABLE_POSITION_FRAMES = 2;
   const STABLE_POSITION_TOLERANCE_PX = 2;
+  const RESET_REVEAL_DELAY_MS = 1600;
 
   let overlay;
+  let overlayParts;
   let editorTarget;
   let observer;
   let editorResizeObserver;
@@ -25,6 +27,7 @@
   let pendingEditorTarget;
   let pendingEditorRect;
   let stablePositionFrames = 0;
+  let resetRevealTimer;
   let unlocked = false;
   let mode = "initial";
 
@@ -70,6 +73,7 @@
     document.documentElement.classList.remove(ROOT_CLASS);
     overlay?.remove();
     overlay = undefined;
+    overlayParts = undefined;
     observer?.disconnect();
     editorResizeObserver?.disconnect();
     confirmObserver?.disconnect();
@@ -85,6 +89,7 @@
     }
     window.clearTimeout(positionRetryTimer);
     positionRetryTimer = undefined;
+    clearResetRevealTimer();
     window.removeEventListener("resize", queuePositionOverlay);
     window.removeEventListener("scroll", queuePositionOverlay, true);
     window.visualViewport?.removeEventListener("resize", queuePositionOverlay);
@@ -93,6 +98,11 @@
 
   function unlock() {
     deactivate(true);
+  }
+
+  function clearResetRevealTimer() {
+    window.clearTimeout(resetRevealTimer);
+    resetRevealTimer = undefined;
   }
 
   function clickElement(element) {
@@ -320,13 +330,27 @@
   }
 
   function setMode(nextMode) {
+    if (nextMode !== "reset-waiting") {
+      clearResetRevealTimer();
+    }
+
     mode = nextMode;
     renderOverlay();
   }
 
+  function scheduleRevealAfterReset() {
+    clearResetRevealTimer();
+    resetRevealTimer = window.setTimeout(() => {
+      if (!unlocked && shouldActivate() && mode === "reset-waiting") {
+        unlock();
+      }
+    }, RESET_REVEAL_DELAY_MS);
+  }
+
   function handleStartFresh() {
     if (tryClickResetControl()) {
-      setMode("reset-clicked");
+      setMode("reset-waiting");
+      scheduleRevealAfterReset();
       return;
     }
 
@@ -334,12 +358,14 @@
   }
 
   function panelCopy() {
-    if (mode === "reset-clicked") {
+    if (mode === "reset-waiting") {
       return {
         title: "Reset requested",
         copy:
-          "If LeetCode asks for confirmation, confirm it while this shield keeps the old code hidden. Reveal the editor once the starter template is back.",
-        primary: "Reveal Fresh Editor",
+          "The shield is staying up while LeetCode restores the starter template.",
+        hint: "Keep covered until LeetCode finishes resetting.",
+        primary: "Resetting...",
+        primaryDisabled: true,
         secondary: "Try Reset Again",
       };
     }
@@ -363,6 +389,67 @@
     };
   }
 
+  function createOverlayParts() {
+    const panel = document.createElement("div");
+    panel.className = "leetloop-panel";
+
+    const kicker = document.createElement("p");
+    kicker.className = "leetloop-kicker";
+    kicker.textContent = "LeetLoop Shield";
+
+    const title = document.createElement("h2");
+    const body = document.createElement("p");
+
+    const hint = document.createElement("p");
+    hint.className = "leetloop-hint";
+
+    const actions = document.createElement("div");
+    actions.className = "leetloop-actions";
+
+    const primary = document.createElement("button");
+    primary.className = "leetloop-primary";
+    primary.type = "button";
+
+    const secondary = document.createElement("button");
+    secondary.className = "leetloop-secondary";
+    secondary.type = "button";
+
+    const dismiss = document.createElement("button");
+    dismiss.className = "leetloop-link";
+    dismiss.type = "button";
+    dismiss.textContent = "Dismiss";
+
+    actions.append(primary, secondary, dismiss);
+    panel.append(kicker, title, body, hint, actions);
+    overlay.appendChild(panel);
+
+    return {
+      body,
+      dismiss,
+      hint,
+      primary,
+      secondary,
+      title,
+    };
+  }
+
+  function updateOverlayContent() {
+    const copy = panelCopy();
+    const primaryAction = mode === "initial" ? handleStartFresh : unlock;
+    const secondaryAction = mode === "initial" ? unlock : handleStartFresh;
+
+    overlayParts.title.textContent = copy.title;
+    overlayParts.body.textContent = copy.copy;
+    overlayParts.hint.hidden = !copy.hint;
+    overlayParts.hint.textContent = copy.hint ?? "";
+    overlayParts.primary.textContent = copy.primary;
+    overlayParts.primary.disabled = Boolean(copy.primaryDisabled);
+    overlayParts.primary.onclick = primaryAction;
+    overlayParts.secondary.textContent = copy.secondary;
+    overlayParts.secondary.onclick = secondaryAction;
+    overlayParts.dismiss.onclick = unlock;
+  }
+
   function renderOverlay() {
     if (unlocked || !shouldActivate()) {
       return;
@@ -375,49 +462,8 @@
       document.documentElement.appendChild(overlay);
     }
 
-    const copy = panelCopy();
-    const primaryAction = mode === "initial" ? handleStartFresh : unlock;
-    const secondaryAction = mode === "initial" ? unlock : handleStartFresh;
-
-    overlay.innerHTML = "";
-
-    const panel = document.createElement("div");
-    panel.className = "leetloop-panel";
-
-    const kicker = document.createElement("p");
-    kicker.className = "leetloop-kicker";
-    kicker.textContent = "LeetLoop Shield";
-
-    const title = document.createElement("h2");
-    title.textContent = copy.title;
-
-    const body = document.createElement("p");
-    body.textContent = copy.copy;
-
-    const actions = document.createElement("div");
-    actions.className = "leetloop-actions";
-
-    const primary = document.createElement("button");
-    primary.className = "leetloop-primary";
-    primary.type = "button";
-    primary.textContent = copy.primary;
-    primary.addEventListener("click", primaryAction);
-
-    const secondary = document.createElement("button");
-    secondary.className = "leetloop-secondary";
-    secondary.type = "button";
-    secondary.textContent = copy.secondary;
-    secondary.addEventListener("click", secondaryAction);
-
-    const dismiss = document.createElement("button");
-    dismiss.className = "leetloop-link";
-    dismiss.type = "button";
-    dismiss.textContent = "Dismiss";
-    dismiss.addEventListener("click", unlock);
-
-    actions.append(primary, secondary, dismiss);
-    panel.append(kicker, title, body, actions);
-    overlay.appendChild(panel);
+    overlayParts ??= createOverlayParts();
+    updateOverlayContent();
 
     queuePositionOverlay();
   }
