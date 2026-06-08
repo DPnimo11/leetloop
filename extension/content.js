@@ -8,12 +8,13 @@
   const OVERLAY_ID = "leetloop-spoiler-overlay";
   const MIN_EDITOR_WIDTH = 260;
   const MIN_EDITOR_HEIGHT = 160;
-  const CONFIRM_RESET_TIMEOUT_MS = 3000;
   const POSITION_RETRY_DURATION_MS = 4000;
   const POSITION_RETRY_INTERVAL_MS = 120;
   const STABLE_POSITION_FRAMES = 2;
   const STABLE_POSITION_TOLERANCE_PX = 2;
-  const RESET_REVEAL_DELAY_MS = 1600;
+  const RESET_CONFIRM_GRACE_MS = 500;
+  const RESET_CONFIRMED_REVEAL_DELAY_MS = 50;
+  const RESET_REVEAL_DELAY_MS = 1000;
 
   let overlay;
   let overlayParts;
@@ -28,6 +29,9 @@
   let pendingEditorRect;
   let stablePositionFrames = 0;
   let resetRevealTimer;
+  let resetConfirmGraceTimer;
+  let resetConfirmSeen = false;
+  let hasAnchoredOverlay = false;
   let unlocked = false;
   let mode = "initial";
 
@@ -82,6 +86,7 @@
     observedEditorTarget = undefined;
     confirmObserver = undefined;
     editorTarget = undefined;
+    hasAnchoredOverlay = false;
     resetStablePosition();
     if (positionFrame) {
       window.cancelAnimationFrame(positionFrame);
@@ -90,6 +95,7 @@
     window.clearTimeout(positionRetryTimer);
     positionRetryTimer = undefined;
     clearResetRevealTimer();
+    clearResetConfirmMonitor();
     window.removeEventListener("resize", queuePositionOverlay);
     window.removeEventListener("scroll", queuePositionOverlay, true);
     window.visualViewport?.removeEventListener("resize", queuePositionOverlay);
@@ -105,10 +111,7 @@
     resetRevealTimer = undefined;
   }
 
-  function clickElement(element) {
-    element.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true, view: window }));
-    element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
-    element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
+  function quietClickElement(element) {
     if (typeof element.click === "function") {
       element.click();
       return;
@@ -259,10 +262,16 @@
   }
 
   function findResetConfirmControl() {
-    const dialogs = Array.from(
-      document.querySelectorAll("[role='dialog'], [data-state='open'], .fixed, .modal, .popover"),
-    ).filter((candidate) => isVisible(candidate) && !isShieldElement(candidate));
-    const roots = dialogs.length ? dialogs : [document.body].filter(Boolean);
+    const roots = Array.from(
+      document.querySelectorAll("[role='dialog'], [aria-modal='true'], [data-state='open'], .modal, .popover"),
+    ).filter((candidate) => {
+      if (!isVisible(candidate) || isShieldElement(candidate)) {
+        return false;
+      }
+
+      const text = elementLabel(candidate).toLowerCase();
+      return /reset/.test(text) && /(code|editor|default|confirm|discard|changes?)/.test(text);
+    });
 
     for (const root of roots) {
       const candidates = visibleActionElements(root);
@@ -274,47 +283,55 @@
       if (confirm) {
         return confirm;
       }
-
-      const greenConfirm = root.querySelector(".text-label-r.bg-green-s");
-
-      if (greenConfirm && isVisible(greenConfirm) && !isShieldElement(greenConfirm)) {
-        return greenConfirm;
-      }
     }
 
     return undefined;
   }
 
-  function tryClickResetConfirm() {
-    const confirmControl = findResetConfirmControl();
-
-    if (!confirmControl) {
-      return false;
-    }
-
-    clickElement(confirmControl);
-    return true;
+  function clearResetConfirmMonitor() {
+    confirmObserver?.disconnect();
+    confirmObserver = undefined;
+    window.clearTimeout(resetConfirmGraceTimer);
+    resetConfirmGraceTimer = undefined;
+    resetConfirmSeen = false;
   }
 
-  function observeResetConfirm() {
-    confirmObserver?.disconnect();
+  function isResetFlowMode(value) {
+    return value === "reset-waiting" || value === "reset-confirm";
+  }
 
-    const stopAt = Date.now() + CONFIRM_RESET_TIMEOUT_MS;
+  function checkResetConfirmation() {
+    const hasConfirmation = Boolean(findResetConfirmControl());
 
-    confirmObserver = new MutationObserver(() => {
-      if (tryClickResetConfirm() || Date.now() > stopAt) {
-        confirmObserver?.disconnect();
-        confirmObserver = undefined;
+    if (hasConfirmation) {
+      resetConfirmSeen = true;
+      clearResetRevealTimer();
+      if (mode !== "reset-confirm") {
+        setMode("reset-confirm");
       }
-    });
+      overlay.hidden = true;
+      return;
+    }
 
+    if (resetConfirmSeen) {
+      clearResetConfirmMonitor();
+      scheduleRevealAfterReset(RESET_CONFIRMED_REVEAL_DELAY_MS);
+    }
+  }
+
+  function observeResetConfirmation() {
+    clearResetConfirmMonitor();
+
+    confirmObserver = new MutationObserver(checkResetConfirmation);
     confirmObserver.observe(document.body ?? document.documentElement, { childList: true, subtree: true });
-    window.setTimeout(() => {
-      if (tryClickResetConfirm() || confirmObserver) {
-        confirmObserver?.disconnect();
-        confirmObserver = undefined;
+
+    resetConfirmGraceTimer = window.setTimeout(() => {
+      checkResetConfirmation();
+
+      if (!resetConfirmSeen && mode === "reset-waiting") {
+        scheduleRevealAfterReset();
       }
-    }, CONFIRM_RESET_TIMEOUT_MS);
+    }, RESET_CONFIRM_GRACE_MS);
   }
 
   function tryClickResetControl() {
@@ -324,33 +341,33 @@
       return false;
     }
 
-    clickElement(resetControl);
-    observeResetConfirm();
+    quietClickElement(resetControl);
     return true;
   }
 
   function setMode(nextMode) {
-    if (nextMode !== "reset-waiting") {
+    if (!isResetFlowMode(nextMode)) {
       clearResetRevealTimer();
+      clearResetConfirmMonitor();
     }
 
     mode = nextMode;
     renderOverlay();
   }
 
-  function scheduleRevealAfterReset() {
+  function scheduleRevealAfterReset(delayMs = RESET_REVEAL_DELAY_MS) {
     clearResetRevealTimer();
     resetRevealTimer = window.setTimeout(() => {
-      if (!unlocked && shouldActivate() && mode === "reset-waiting") {
+      if (!unlocked && shouldActivate() && isResetFlowMode(mode)) {
         unlock();
       }
-    }, RESET_REVEAL_DELAY_MS);
+    }, delayMs);
   }
 
   function handleStartFresh() {
     if (tryClickResetControl()) {
       setMode("reset-waiting");
-      scheduleRevealAfterReset();
+      observeResetConfirmation();
       return;
     }
 
@@ -365,6 +382,18 @@
           "The shield is staying up while LeetCode restores the starter template.",
         hint: "Keep covered until LeetCode finishes resetting.",
         primary: "Resetting...",
+        primaryDisabled: true,
+        secondary: "Try Reset Again",
+      };
+    }
+
+    if (mode === "reset-confirm") {
+      return {
+        title: "Confirm reset",
+        copy:
+          "LeetCode is asking you to confirm the reset. Click its reset or confirm button while this shield keeps the editor hidden.",
+        hint: "The shield will reveal automatically after the confirmation closes.",
+        primary: "Waiting...",
         primaryDisabled: true,
         secondary: "Try Reset Again",
       };
@@ -395,7 +424,7 @@
 
     const kicker = document.createElement("p");
     kicker.className = "leetloop-kicker";
-    kicker.textContent = "LeetLoop Shield";
+    kicker.textContent = "LeetLoop";
 
     const title = document.createElement("h2");
     const body = document.createElement("p");
@@ -510,6 +539,14 @@
     overlay.hidden = true;
   }
 
+  function keepAnchoredOverlayVisible() {
+    if (hasAnchoredOverlay && overlay && !overlay.hidden) {
+      return true;
+    }
+
+    return false;
+  }
+
   function queuePositionOverlay() {
     if (positionFrame) {
       return;
@@ -545,6 +582,11 @@
       return;
     }
 
+    if (mode === "reset-confirm") {
+      overlay.hidden = true;
+      return;
+    }
+
     const nextTarget = findEditorTarget();
     editorTarget = isUsableEditorTarget(nextTarget)
       ? nextTarget
@@ -553,6 +595,10 @@
         : undefined;
 
     if (!editorTarget) {
+      if (keepAnchoredOverlayVisible()) {
+        return;
+      }
+
       resetStablePosition();
       hideOverlayUntilAnchored();
       return;
@@ -573,6 +619,10 @@
     const height = Math.min(Math.max(rect.height, MIN_EDITOR_HEIGHT), viewportHeight - top - 8);
 
     if (width < MIN_EDITOR_WIDTH || height < MIN_EDITOR_HEIGHT) {
+      if (keepAnchoredOverlayVisible()) {
+        return;
+      }
+
       resetStablePosition();
       hideOverlayUntilAnchored();
       return;
@@ -584,6 +634,7 @@
     overlay.style.width = `${width}px`;
     overlay.style.height = `${height}px`;
     overlay.hidden = false;
+    hasAnchoredOverlay = true;
     observeEditorTarget(editorTarget);
   }
 

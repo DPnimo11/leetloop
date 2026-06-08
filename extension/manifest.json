@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "LeetLoop Spoiler Shield",
-  "description": "Hides previous LeetCode editor code when a problem is opened from LeetLoop.",
+  "name": "LeetLoop",
+  "description": "Connects LeetLoop with LeetCode review workflows.",
   "version": "0.1.0",
   "content_scripts": [
     {
