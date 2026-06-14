@@ -1,14 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CalendarDays,
+  Check,
   ExternalLink,
   History,
   ListPlus,
   RefreshCw,
 } from "lucide-react";
+import { toLocalDateKey } from "@/lib/dates";
 import type { LeetCodeDailyProblem } from "@/lib/dailyLeetcode";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { getProblemLeetcodeSlug } from "@/lib/problemSets";
@@ -106,6 +109,13 @@ export function DailyLeetCodeCard() {
     () => normalizePatternTags(dailyProblem?.topicTags.map((tag) => tag.name) ?? []),
     [dailyProblem],
   );
+  const completedToday = queuedProblem
+    ? data.attempts.some(
+        (attempt) =>
+          attempt.problemId === queuedProblem.id &&
+          toLocalDateKey(new Date(attempt.attemptedAt)) === toLocalDateKey(new Date()),
+      )
+    : false;
 
   function addAndLogDailyProblem() {
     if (!dailyProblem) {
@@ -188,17 +198,27 @@ export function DailyLeetCodeCard() {
                 Premium
               </span>
             ) : null}
+            {completedToday ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                <Check size={12} />
+                Done today
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <a
-              className="text-lg font-semibold tracking-normal text-[var(--foreground)] hover:text-[var(--accent-strong)]"
-              href={leetLoopReviewUrl(dailyProblem.url)}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {dailyProblem.title}
-            </a>
+            {queuedProblem ? (
+              <Link
+                className="text-lg font-semibold tracking-normal text-[var(--foreground)] hover:text-[var(--accent-strong)]"
+                href={`/problems/${queuedProblem.id}`}
+              >
+                {dailyProblem.title}
+              </Link>
+            ) : (
+              <span className="text-lg font-semibold tracking-normal text-[var(--foreground)]">
+                {dailyProblem.title}
+              </span>
+            )}
             <DifficultyBadge difficulty={dailyProblem.difficulty} />
           </div>
 
@@ -212,6 +232,15 @@ export function DailyLeetCodeCard() {
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
+          <a
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
+            href={leetLoopReviewUrl(dailyProblem.url)}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink size={16} />
+            Open
+          </a>
           {queuedProblem ? (
             <button
               className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
@@ -232,15 +261,6 @@ export function DailyLeetCodeCard() {
               Add & Log
             </button>
           )}
-          <a
-            className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
-            href={leetLoopReviewUrl(dailyProblem.url)}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <ExternalLink size={16} />
-            Open
-          </a>
         </div>
       </div>
       {loggingProblem ? (
