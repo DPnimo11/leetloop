@@ -13,6 +13,7 @@ import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
 import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { DailyLeetCodeCard } from "./DailyLeetCodeCard";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
 import { ProblemCard } from "./ProblemCard";
@@ -292,6 +293,8 @@ export function TodayClient() {
           <p className="mt-1 text-2xl font-semibold">{plannedNewToday.length}</p>
         </div>
       </section>
+
+      <DailyLeetCodeCard />
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold tracking-normal">Overdue</h2>
