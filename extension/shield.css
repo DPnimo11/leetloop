@@ -6,6 +6,11 @@ html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data
   opacity: 0.08 !important;
 }
 
+.leetloop-spoiler-shield-host {
+  isolation: isolate !important;
+  position: relative !important;
+}
+
 #leetloop-spoiler-overlay {
   align-items: center;
   background: rgba(15, 23, 42, 0.82);
@@ -23,12 +28,8 @@ html.leetloop-spoiler-shield-active:not(.leetloop-spoiler-shield-unlocked) [data
     sans-serif;
   justify-content: center;
   padding: 20px;
-  position: fixed;
-  height: 100vh;
-  left: 0;
-  top: 0;
-  width: 100vw;
-  z-index: 2147483647;
+  position: absolute;
+  z-index: 20;
 }
 
 #leetloop-spoiler-overlay[hidden] {

@@ -15,6 +15,8 @@
   const RESET_CONFIRM_GRACE_MS = 500;
   const RESET_CONFIRMED_REVEAL_DELAY_MS = 50;
   const RESET_REVEAL_DELAY_MS = 1000;
+  const LOCATION_CHECK_INTERVAL_MS = 250;
+  const HOST_CLASS = "leetloop-spoiler-shield-host";
 
   let overlay;
   let overlayParts;
@@ -32,6 +34,9 @@
   let resetConfirmGraceTimer;
   let resetConfirmSeen = false;
   let hasAnchoredOverlay = false;
+  let lastHref = window.location.href;
+  let locationCheckTimer;
+  let overlayHost;
   let unlocked = false;
   let mode = "initial";
 
@@ -78,6 +83,8 @@
     overlay?.remove();
     overlay = undefined;
     overlayParts = undefined;
+    overlayHost?.classList.remove(HOST_CLASS);
+    overlayHost = undefined;
     observer?.disconnect();
     editorResizeObserver?.disconnect();
     confirmObserver?.disconnect();
@@ -488,7 +495,6 @@
       overlay = document.createElement("div");
       overlay.id = OVERLAY_ID;
       overlay.hidden = true;
-      document.documentElement.appendChild(overlay);
     }
 
     overlayParts ??= createOverlayParts();
@@ -537,6 +543,28 @@
     editorResizeObserver?.disconnect();
     observedEditorTarget = undefined;
     overlay.hidden = true;
+  }
+
+  function overlayHostForEditor(target) {
+    return target.closest("#editor") ?? target.parentElement;
+  }
+
+  function mountOverlayInHost(host) {
+    if (!host || !overlay) {
+      return false;
+    }
+
+    if (overlayHost !== host) {
+      overlayHost?.classList.remove(HOST_CLASS);
+      overlayHost = host;
+      overlayHost.classList.add(HOST_CLASS);
+    }
+
+    if (overlay.parentElement !== host) {
+      host.appendChild(overlay);
+    }
+
+    return true;
   }
 
   function keepAnchoredOverlayVisible() {
@@ -605,18 +633,24 @@
     }
 
     const rect = editorTarget.getBoundingClientRect();
+    const host = overlayHostForEditor(editorTarget);
+
+    if (!mountOverlayInHost(host)) {
+      resetStablePosition();
+      hideOverlayUntilAnchored();
+      return;
+    }
 
     if (overlay.hidden && !hasStablePosition(editorTarget, rect)) {
       hideOverlayUntilAnchored();
       return;
     }
 
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const left = Math.max(8, rect.left);
-    const top = Math.max(8, rect.top);
-    const width = Math.min(Math.max(rect.width, MIN_EDITOR_WIDTH), viewportWidth - left - 8);
-    const height = Math.min(Math.max(rect.height, MIN_EDITOR_HEIGHT), viewportHeight - top - 8);
+    const hostRect = host.getBoundingClientRect();
+    const left = Math.max(0, rect.left - hostRect.left + host.scrollLeft);
+    const top = Math.max(0, rect.top - hostRect.top + host.scrollTop);
+    const width = Math.max(rect.width, MIN_EDITOR_WIDTH);
+    const height = Math.max(rect.height, MIN_EDITOR_HEIGHT);
 
     if (width < MIN_EDITOR_WIDTH || height < MIN_EDITOR_HEIGHT) {
       if (keepAnchoredOverlayVisible()) {
@@ -693,18 +727,38 @@
     deactivate(false);
   }
 
+  function checkLocationChange() {
+    if (window.location.href === lastHref) {
+      return;
+    }
+
+    lastHref = window.location.href;
+    handleLocationChange();
+  }
+
+  function startLocationWatcher() {
+    if (locationCheckTimer) {
+      return;
+    }
+
+    locationCheckTimer = window.setInterval(checkLocationChange, LOCATION_CHECK_INTERVAL_MS);
+    document.addEventListener("visibilitychange", checkLocationChange);
+    window.addEventListener("focus", checkLocationChange);
+  }
+
   function patchHistory(methodName) {
     const original = window.history[methodName];
     window.history[methodName] = function patchedHistoryMethod(...args) {
       const result = original.apply(this, args);
-      window.setTimeout(handleLocationChange, 0);
+      window.setTimeout(checkLocationChange, 0);
       return result;
     };
   }
 
   patchHistory("pushState");
   patchHistory("replaceState");
-  window.addEventListener("popstate", handleLocationChange);
+  window.addEventListener("popstate", checkLocationChange);
+  startLocationWatcher();
 
   activate();
 })();
