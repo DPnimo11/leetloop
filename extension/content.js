@@ -321,7 +321,7 @@
       if (mode !== "reset-confirm") {
         setMode("reset-confirm");
       }
-      overlay.hidden = true;
+      suspendOverlayForNativeDialog();
       return;
     }
 
@@ -572,6 +572,19 @@
     return true;
   }
 
+  function clearOverlayHost() {
+    overlayHost?.classList.remove(HOST_CLASS);
+    overlayHost = undefined;
+  }
+
+  function suspendOverlayForNativeDialog() {
+    if (overlay) {
+      overlay.hidden = true;
+      overlay.remove();
+    }
+    clearOverlayHost();
+  }
+
   function keepAnchoredOverlayVisible() {
     if (hasAnchoredOverlay && overlay && !overlay.hidden) {
       return true;
@@ -616,7 +629,7 @@
     }
 
     if (mode === "reset-confirm") {
-      overlay.hidden = true;
+      suspendOverlayForNativeDialog();
       return;
     }
 
