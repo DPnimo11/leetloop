@@ -4,10 +4,9 @@ import {
   parseLeetCodeDailyProblem,
 } from "@/lib/dailyLeetcode";
 
-const DAILY_REVALIDATE_SECONDS = 30 * 60;
 const LEETCODE_GRAPHQL_URL = "https://leetcode.com/graphql";
 
-export const revalidate = 1800;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -22,7 +21,7 @@ export async function GET() {
         operationName: "questionOfToday",
         query: LEETCODE_DAILY_QUERY,
       }),
-      next: { revalidate: DAILY_REVALIDATE_SECONDS },
+      cache: "no-store",
     });
 
     if (!response.ok) {
@@ -42,7 +41,10 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ problem });
+    return NextResponse.json(
+      { problem },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch {
     return NextResponse.json(
       { error: "Could not load the LeetCode daily problem." },

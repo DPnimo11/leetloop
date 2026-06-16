@@ -62,6 +62,7 @@ export function DailyLeetCodeCard() {
 
       try {
         const response = await fetch("/api/leetcode/daily", {
+          cache: "no-store",
           signal: controller.signal,
         });
         const payload = (await response.json()) as DailyProblemResponse;

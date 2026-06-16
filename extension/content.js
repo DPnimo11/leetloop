@@ -40,8 +40,12 @@
   let unlocked = false;
   let mode = "initial";
 
+  function problemSlug(url) {
+    return url.pathname.match(/^\/problems\/([^/]+)\/?/)?.[1];
+  }
+
   function isProblemUrl(url) {
-    return /^\/problems\/[^/]+\/?/.test(url.pathname);
+    return Boolean(problemSlug(url));
   }
 
   function activationValue(url) {
@@ -54,7 +58,8 @@
   }
 
   function sessionKey() {
-    return `leetloop-spoiler-shield:${window.location.pathname}`;
+    const url = new URL(window.location.href);
+    return `leetloop-spoiler-shield:${problemSlug(url) ?? url.pathname}`;
   }
 
   function isSessionUnlocked() {
