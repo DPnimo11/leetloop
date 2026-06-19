@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { LeetLoopProvider } from "@/components/LeetLoopProvider";
 import { ShellNav } from "@/components/ShellNav";
+import { createClient } from "@/lib/supabase/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,11 +11,16 @@ export const metadata: Metadata = {
   description: "A spaced-repetition queue for LeetCode review.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
 }>) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <html lang="en">
       <body>
@@ -30,7 +36,25 @@ export default function RootLayout({
                     Spaced review for coding interviews
                   </span>
                 </Link>
-                <ShellNav />
+                {user ? (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <ShellNav />
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="hidden text-[var(--muted)] lg:inline">
+                        {user.email}
+                      </span>
+                      <form action="/auth/signout" method="post">
+                        <button
+                          type="submit"
+                          className="shell-link"
+                          title={`Signed in as ${user.email ?? "your account"}`}
+                        >
+                          Sign out
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </header>
             <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{children}</main>
