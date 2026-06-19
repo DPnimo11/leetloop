@@ -91,7 +91,7 @@ export function BackupControls() {
             type="button"
           >
             <Upload size={16} />
-            {importing ? "Importing…" : "Import JSON"}
+            {importing ? "Importing..." : "Import JSON"}
           </button>
           <input
             accept="application/json,.json"

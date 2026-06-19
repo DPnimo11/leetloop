@@ -3,7 +3,6 @@
 import { SHAKY_ATTEMPT_RESULTS, type AttemptResult } from "@/types/attempt";
 import { isDueToday, isOverdue } from "@/lib/dates";
 import { EmptyState } from "./EmptyState";
-import { BackupControls } from "./BackupControls";
 import { useLeetLoop } from "./LeetLoopProvider";
 
 type PatternStat = {
@@ -149,8 +148,6 @@ export function AnalyticsClient() {
           )}
         </div>
       </section>
-
-      <BackupControls />
     </div>
   );
 }
