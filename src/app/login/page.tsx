@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, type ReactNode } from "react";
 import type { Provider } from "@supabase/supabase-js";
 import { Github, Loader2 } from "lucide-react";
@@ -35,9 +36,14 @@ export default function LoginPage() {
       <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-white shadow-sm">
         <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-lg bg-[#e6f4f1] text-lg font-bold text-[var(--accent-strong)]">
-              LL
-            </div>
+            <Image
+              alt=""
+              className="size-12 shrink-0 object-contain"
+              height={48}
+              priority
+              src="/logo.png"
+              width={48}
+            />
             <div>
               <p className="text-sm font-semibold text-[var(--accent-strong)]">LeetLoop</p>
               <h1 className="text-2xl font-semibold tracking-normal text-[var(--foreground)]">
