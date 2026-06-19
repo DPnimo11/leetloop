@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { AccountMenu } from "@/components/AccountMenu";
 import { LeetLoopProvider } from "@/components/LeetLoopProvider";
 import { ShellNav } from "@/components/ShellNav";
 import { SyncStatusBanner } from "@/components/SyncStatusBanner";
@@ -21,6 +22,8 @@ export default async function RootLayout({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const accountName = user ? userDisplayName(user.user_metadata, user.email) : undefined;
+  const accountAvatarUrl = user ? userAvatarUrl(user.user_metadata) : undefined;
 
   return (
     <html lang="en">
@@ -40,20 +43,11 @@ export default async function RootLayout({
                 {user ? (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <ShellNav />
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="hidden text-[var(--muted)] lg:inline">
-                        {user.email}
-                      </span>
-                      <form action="/auth/signout" method="post">
-                        <button
-                          type="submit"
-                          className="shell-link"
-                          title={`Signed in as ${user.email ?? "your account"}`}
-                        >
-                          Sign out
-                        </button>
-                      </form>
-                    </div>
+                    <AccountMenu
+                      avatarUrl={accountAvatarUrl}
+                      email={user.email}
+                      name={accountName}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -65,4 +59,26 @@ export default async function RootLayout({
       </body>
     </html>
   );
+}
+
+function userDisplayName(metadata: Record<string, unknown>, email?: string): string | undefined {
+  const value =
+    stringValue(metadata.full_name) ??
+    stringValue(metadata.name) ??
+    stringValue(metadata.user_name) ??
+    stringValue(metadata.preferred_username);
+
+  return value ?? email?.split("@")[0];
+}
+
+function userAvatarUrl(metadata: Record<string, unknown>): string | undefined {
+  return (
+    stringValue(metadata.avatar_url) ??
+    stringValue(metadata.picture) ??
+    stringValue(metadata.image)
+  );
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
