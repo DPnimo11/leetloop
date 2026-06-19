@@ -11,28 +11,10 @@ import {
   createEmptyData,
   exportData,
   importData,
-  loadData,
   logAttempt,
   parseLeetLoopData,
-  saveData,
 } from "./storage";
 import type { ProblemTemplate } from "@/types/problem-set";
-
-class MemoryStorage {
-  private values = new Map<string, string>();
-
-  getItem(key: string) {
-    return this.values.get(key) ?? null;
-  }
-
-  setItem(key: string, value: string) {
-    this.values.set(key, value);
-  }
-
-  removeItem(key: string) {
-    this.values.delete(key);
-  }
-}
 
 const now = new Date("2026-05-18T12:00:00.000Z");
 
@@ -50,16 +32,14 @@ const template: ProblemTemplate = {
 };
 
 describe("storage helpers", () => {
-  it("creates, saves, and loads data from injected storage", () => {
-    const storage = new MemoryStorage();
+  it("creates data and round-trips it through parse", () => {
     const empty = createEmptyData(now);
     const { data } = addProblem(empty, createProblemInputFromTemplate(template), {
       now,
       idFactory: () => "problem_1",
     });
 
-    saveData(data, storage);
-    const loaded = loadData(storage);
+    const loaded = parseLeetLoopData(exportData(data));
 
     expect(loaded.problems).toHaveLength(1);
     expect(loaded.problems[0]?.title).toBe("Two Sum");

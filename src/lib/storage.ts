@@ -12,8 +12,6 @@ import { createDefaultSettings, normalizeSettings, updateSettings as updateSetti
 export const STORAGE_VERSION = 1;
 export const STORAGE_KEY = "leetloop:data:v1";
 
-export type StorageLike = Pick<Storage, "getItem" | "removeItem" | "setItem">;
-
 export type IdFactory = () => string;
 
 export type MutationOptions = {
@@ -29,14 +27,6 @@ export function createEmptyData(now = new Date()): LeetLoopData {
     settings: createDefaultSettings(),
     updatedAt: now.toISOString(),
   };
-}
-
-function getBrowserStorage(): StorageLike | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  return window.localStorage;
 }
 
 function createId(prefix: string, idFactory?: IdFactory): string {
@@ -317,28 +307,14 @@ export function parseLeetLoopData(raw: string): LeetLoopData {
   };
 }
 
-export function loadData(storage = getBrowserStorage()): LeetLoopData {
-  if (!storage) {
-    return createEmptyData();
+/**
+ * Removes the legacy pre-cloud localStorage blob. App state now lives in
+ * Supabase; this purges stale local data after a successful cloud load.
+ */
+export function clearLegacyLocalData(): void {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(STORAGE_KEY);
   }
-
-  const raw = storage.getItem(STORAGE_KEY);
-
-  if (!raw) {
-    return createEmptyData();
-  }
-
-  return parseLeetLoopData(raw);
-}
-
-export function saveData(data: LeetLoopData, storage = getBrowserStorage()): LeetLoopData {
-  const nextData = touchData(data);
-  storage?.setItem(STORAGE_KEY, JSON.stringify(nextData));
-  return nextData;
-}
-
-export function clearData(storage = getBrowserStorage()): void {
-  storage?.removeItem(STORAGE_KEY);
 }
 
 export function exportData(data: LeetLoopData): string {

@@ -17,6 +17,7 @@ import type { LeetLoopData, LeetLoopSettings } from "@/types/storage";
 import {
   addProblem as addProblemToData,
   addProblemFromTemplate as addProblemFromTemplateToData,
+  clearLegacyLocalData,
   createEmptyData,
   deleteProblem as deleteProblemFromData,
   exportData as exportDataFromStorage,
@@ -145,6 +146,8 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
         setData(planned);
         // Persist any planning side effects that ran on load.
         enqueueSync(loaded, planned);
+        // Cloud is now the source of truth; drop the legacy local blob.
+        clearLegacyLocalData();
       } catch (error) {
         if (cancelled) {
           return;
