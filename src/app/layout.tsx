@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { LeetLoopProvider } from "@/components/LeetLoopProvider";
 import { ShellNav } from "@/components/ShellNav";
+import { SyncStatusBanner } from "@/components/SyncStatusBanner";
 import { createClient } from "@/lib/supabase/server";
 import "./globals.css";
 
@@ -57,6 +58,7 @@ export default async function RootLayout({
                 ) : null}
               </div>
             </header>
+            <SyncStatusBanner />
             <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">{children}</main>
           </div>
         </LeetLoopProvider>

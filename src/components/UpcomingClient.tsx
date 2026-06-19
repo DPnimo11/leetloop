@@ -55,7 +55,7 @@ export function UpcomingClient() {
   const dailyTarget = getDailyTarget(data.settings);
 
   if (!ready) {
-    return <EmptyState title="Loading upcoming plan" copy="Local data is loading." />;
+    return <EmptyState title="Loading upcoming plan" copy="Your data is loading." />;
   }
 
   return (

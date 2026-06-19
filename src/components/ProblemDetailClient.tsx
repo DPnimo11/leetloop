@@ -21,7 +21,7 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
   const attempts = getProblemAttempts(problemId);
 
   if (!ready) {
-    return <EmptyState title="Loading problem" copy="Local data is loading." />;
+    return <EmptyState title="Loading problem" copy="Your data is loading." />;
   }
 
   if (!problem) {

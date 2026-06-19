@@ -53,7 +53,7 @@ export function ProblemsClient() {
   }, [data.problems, difficulty, dueFilter, pattern, search, status]);
 
   if (!ready) {
-    return <EmptyState title="Loading problems" copy="Local data is loading." />;
+    return <EmptyState title="Loading problems" copy="Your data is loading." />;
   }
 
   return (

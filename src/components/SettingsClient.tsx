@@ -11,7 +11,7 @@ export function SettingsClient() {
   const { data, ready, updateSettings } = useLeetLoop();
 
   if (!ready) {
-    return <EmptyState title="Loading settings" copy="Local data is loading." />;
+    return <EmptyState title="Loading settings" copy="Your data is loading." />;
   }
 
   return (

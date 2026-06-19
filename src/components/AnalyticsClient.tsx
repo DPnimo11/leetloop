@@ -83,7 +83,7 @@ export function AnalyticsClient() {
     .slice(0, 8);
 
   if (!ready) {
-    return <EmptyState title="Loading analytics" copy="Local data is loading." />;
+    return <EmptyState title="Loading analytics" copy="Your data is loading." />;
   }
 
   return (

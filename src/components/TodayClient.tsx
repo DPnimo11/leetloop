@@ -221,7 +221,7 @@ export function TodayClient() {
       : "Add a new problem or review a weak pattern.";
 
   if (!ready) {
-    return <EmptyState title="Loading queue" copy="Local data is loading." />;
+    return <EmptyState title="Loading queue" copy="Your data is loading." />;
   }
 
   function addMoreToday() {

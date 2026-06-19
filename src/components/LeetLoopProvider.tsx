@@ -49,7 +49,7 @@ type LeetLoopContextValue = {
   logAttempt: (problemId: string, input: AttemptInput) => Attempt;
   repopulateToday: () => number;
   exportJson: () => string;
-  importJson: (raw: string) => LeetLoopData;
+  importJson: (raw: string) => Promise<LeetLoopData>;
   getProblemAttempts: (problemId: string) => Attempt[];
   isTemplateInQueue: (template: ProblemTemplate) => boolean;
 };
@@ -75,17 +75,25 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
   const pendingSyncRef = useRef(0);
 
   const enqueueSync = useCallback(
-    (prev: LeetLoopData, next: LeetLoopData) => {
+    (prev: LeetLoopData, next: LeetLoopData): Promise<void> => {
       const userId = userIdRef.current;
       if (!userId) {
-        return;
+        return Promise.resolve();
       }
 
       pendingSyncRef.current += 1;
       setSyncing(true);
 
-      syncQueueRef.current = syncQueueRef.current
-        .then(() => syncCloudData(supabase, userId, prev, next))
+      // Run after any in-flight write so mutations persist in order.
+      const run = syncQueueRef.current.then(() => syncCloudData(supabase, userId, prev, next));
+
+      // Keep the queue alive regardless of this op's outcome.
+      syncQueueRef.current = run.then(
+        () => undefined,
+        () => undefined,
+      );
+
+      run
         .then(() => {
           setSyncError(undefined);
         })
@@ -98,6 +106,9 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
             setSyncing(false);
           }
         });
+
+      // Resolves/rejects for THIS op so callers (e.g. import) can await it.
+      return run;
     },
     [supabase],
   );
@@ -237,13 +248,14 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
   const exportJson = useCallback(() => exportDataFromStorage(dataRef.current), []);
 
-  const importJson = useCallback((raw: string) => {
+  const importJson = useCallback(async (raw: string) => {
     const imported = importDataFromStorage(raw);
     const prev = dataRef.current;
     const planned = touchUpdatedAt(planNewProblemStarts(imported));
     dataRef.current = planned;
     setData(planned);
-    enqueueSync(prev, planned);
+    // Await the cloud write so the caller only reports success once it lands.
+    await enqueueSync(prev, planned);
     return planned;
   }, [enqueueSync]);
 

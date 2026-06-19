@@ -9,6 +9,7 @@ export function BackupControls() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [importing, setImporting] = useState(false);
 
   function exportBackup() {
     const blob = new Blob([exportJson()], { type: "application/json" });
@@ -31,7 +32,9 @@ export function BackupControls() {
     setError("");
     setMessage("");
 
-    const confirmed = window.confirm("Importing this file will replace current local LeetLoop data.");
+    const confirmed = window.confirm(
+      "Importing this file will replace your LeetLoop account data in the cloud. This cannot be undone.",
+    );
 
     if (!confirmed) {
       if (fileInputRef.current) {
@@ -40,15 +43,18 @@ export function BackupControls() {
       return;
     }
 
+    setImporting(true);
+
     try {
       const raw = await file.text();
-      const importedData = importJson(raw);
+      const importedData = await importJson(raw);
       setMessage(
-        `Imported ${importedData.problems.length} problems and ${importedData.attempts.length} attempts.`,
+        `Imported and synced ${importedData.problems.length} problems and ${importedData.attempts.length} attempts.`,
       );
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "Could not import that backup.");
     } finally {
+      setImporting(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -64,25 +70,28 @@ export function BackupControls() {
           </p>
           <h2 className="mt-1 text-xl font-semibold tracking-normal">JSON import/export</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-            Current local data: {data.problems.length} problems, {data.attempts.length} attempts.
+            Current account data: {data.problems.length} problems, {data.attempts.length} attempts.
+            Import replaces everything in your cloud account.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
-            className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:opacity-60"
             onClick={exportBackup}
+            disabled={importing}
             type="button"
           >
             <Download size={16} />
             Export JSON
           </button>
           <button
-            className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
+            className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
             onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
             type="button"
           >
             <Upload size={16} />
-            Import JSON
+            {importing ? "Importing…" : "Import JSON"}
           </button>
           <input
             accept="application/json,.json"
