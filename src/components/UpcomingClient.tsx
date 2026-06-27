@@ -5,7 +5,7 @@ import { CalendarDays } from "lucide-react";
 import { countUnscheduledNewProblems, getUpcomingPlan } from "@/lib/planning";
 import { formatDate } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
-import { getDailyTarget } from "@/lib/settings";
+import { getDailyTarget, getReservedNewStarts } from "@/lib/settings";
 import type { Problem } from "@/types/problem";
 import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
@@ -34,6 +34,11 @@ function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new
               <TagPill key={tag} tag={tag} />
             ))}
           </div>
+          {kind === "review" ? (
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Ideally due {formatDate(problem.nextReviewAt)}
+            </p>
+          ) : null}
         </div>
         <a
           className="text-sm font-semibold text-[var(--accent-strong)] hover:underline"
@@ -53,6 +58,7 @@ export function UpcomingClient() {
   const plan = getUpcomingPlan(data);
   const unscheduledNewCount = countUnscheduledNewProblems(data);
   const dailyTarget = getDailyTarget(data.settings);
+  const reservedNewStarts = getReservedNewStarts(data.settings);
 
   if (!ready) {
     return <EmptyState title="Loading upcoming plan" copy="Your data is loading." />;
@@ -68,7 +74,10 @@ export function UpcomingClient() {
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-normal">Next 14 days</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Daily target: {dailyTarget}. Reviews take priority; new starts fill open space.
+              Daily target: {dailyTarget}.{" "}
+              {reservedNewStarts
+                ? `Up to ${reservedNewStarts} slot${reservedNewStarts === 1 ? "" : "s"} reserved for new starts; excess reviews roll forward.`
+                : "Reviews take priority; new starts fill open space."}
             </p>
           </div>
           <div className="rounded-md bg-[var(--surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--muted)]">
@@ -108,6 +117,11 @@ export function UpcomingClient() {
                   <span className="rounded-full border border-[var(--border)] bg-white px-2 py-1">
                     {openSlots} open
                   </span>
+                  {day.waitingReviews.length ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">
+                      {day.waitingReviews.length} waiting
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -123,6 +137,12 @@ export function UpcomingClient() {
               ) : (
                 <p className="mt-3 text-sm text-[var(--muted)]">Nothing planned.</p>
               )}
+              {day.waitingReviews.length ? (
+                <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {day.waitingReviews.length} due review
+                  {day.waitingReviews.length === 1 ? "" : "s"} remain outside this day&apos;s capacity and roll forward.
+                </p>
+              ) : null}
             </section>
           );
         })}

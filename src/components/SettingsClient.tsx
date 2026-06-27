@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { Check, Minus, Plus, Save, ShieldCheck, UserCircle } from "lucide-react";
-import { MAX_DAILY_TARGET, MIN_DAILY_TARGET, clampDailyTarget } from "@/lib/settings";
+import {
+  MAX_DAILY_TARGET,
+  MIN_DAILY_TARGET,
+  clampDailyTarget,
+  clampReservedNewStarts,
+} from "@/lib/settings";
 import type { LeetLoopSettings } from "@/types/storage";
 import { BackupControls } from "./BackupControls";
 import { EmptyState } from "./EmptyState";
@@ -28,6 +33,7 @@ export function SettingsClient({ account }: { account: AccountInfo }) {
       <AccountSection account={account} />
       <SettingsForm
         initialDailyTarget={data.settings.dailyTarget}
+        initialReservedNewStarts={data.settings.reservedNewStartsPerDay}
         updateSettings={updateSettings}
       />
       <BackupControls />
@@ -91,24 +97,40 @@ function AccountSection({ account }: { account: AccountInfo }) {
 
 function SettingsForm({
   initialDailyTarget,
+  initialReservedNewStarts,
   updateSettings,
 }: {
   initialDailyTarget: number;
+  initialReservedNewStarts: number;
   updateSettings: (updates: Partial<LeetLoopSettings>) => void;
 }) {
   const [dailyTarget, setDailyTarget] = useState(initialDailyTarget);
   const [savedDailyTarget, setSavedDailyTarget] = useState(initialDailyTarget);
+  const [reservedNewStarts, setReservedNewStarts] = useState(initialReservedNewStarts);
+  const [savedReservedNewStarts, setSavedReservedNewStarts] = useState(initialReservedNewStarts);
   const [message, setMessage] = useState("");
-  const dirty = dailyTarget !== savedDailyTarget;
+  const dirty =
+    dailyTarget !== savedDailyTarget || reservedNewStarts !== savedReservedNewStarts;
 
   function changeDailyTarget(nextValue: number) {
-    setDailyTarget(clampDailyTarget(nextValue));
+    const nextTarget = clampDailyTarget(nextValue);
+    setDailyTarget(nextTarget);
+    setReservedNewStarts((current) => clampReservedNewStarts(current, nextTarget));
+    setMessage("");
+  }
+
+  function changeReservedNewStarts(nextValue: number) {
+    setReservedNewStarts(clampReservedNewStarts(nextValue, dailyTarget));
     setMessage("");
   }
 
   function saveSettings() {
-    updateSettings({ dailyTarget });
+    updateSettings({
+      dailyTarget,
+      reservedNewStartsPerDay: reservedNewStarts,
+    });
     setSavedDailyTarget(dailyTarget);
+    setSavedReservedNewStarts(reservedNewStarts);
     setMessage("Saved");
   }
 
@@ -120,7 +142,9 @@ function SettingsForm({
             Practice targets
           </p>
           <h2 className="mt-1 text-lg font-semibold tracking-normal">Daily target</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">New starts fill around reviews up to this number.</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Planned reviews and new starts count toward this number.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -166,6 +190,53 @@ function SettingsForm({
           </button>
         </div>
       </div>
+      <div className="mt-4 flex flex-col gap-4 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-base font-semibold tracking-normal">Reserved new-start slots</h3>
+          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">
+            Reviews stay visible, but planning holds this many slots for new problems when available.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            aria-label="Decrease reserved new-start slots"
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[var(--border)] bg-white hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:text-[#98a2b3]"
+            disabled={reservedNewStarts <= 0}
+            onClick={() => changeReservedNewStarts(reservedNewStarts - 1)}
+            type="button"
+          >
+            <Minus size={16} />
+          </button>
+          <input
+            aria-label="Reserved new-start slots"
+            className="h-9 w-20 rounded-md border border-[var(--border)] bg-white px-3 text-center text-sm font-semibold outline-none focus:border-[var(--accent)]"
+            max={dailyTarget}
+            min={0}
+            onChange={(event) => changeReservedNewStarts(Number(event.target.value))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && dirty) {
+                saveSettings();
+              }
+            }}
+            type="number"
+            value={reservedNewStarts}
+          />
+          <button
+            aria-label="Increase reserved new-start slots"
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[var(--border)] bg-white hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:text-[#98a2b3]"
+            disabled={reservedNewStarts >= dailyTarget}
+            onClick={() => changeReservedNewStarts(reservedNewStarts + 1)}
+            type="button"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+      {reservedNewStarts === dailyTarget ? (
+        <p className="mt-3 text-sm font-medium text-amber-700">
+          No review slots will be planned while new problems are available.
+        </p>
+      ) : null}
       {message ? <p className="mt-3 text-sm font-medium text-emerald-700">{message}</p> : null}
     </section>
   );

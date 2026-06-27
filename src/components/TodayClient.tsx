@@ -4,11 +4,16 @@ import Link from "next/link";
 import { useState } from "react";
 import { Check, ExternalLink, ListPlus, Plus, RefreshCw } from "lucide-react";
 import { getAllProblemTemplates, getProblemSetName } from "@/lib/problemSets";
-import { isDueOnOrBefore, isDueToday, isOverdue, parseDate, toLocalDateKey } from "@/lib/dates";
+import { toLocalDateKey } from "@/lib/dates";
 import { formatAttemptResult, formatDateTime } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
-import { countRefillCandidateProblems, countUnscheduledNewProblems, isReviewProblem } from "@/lib/planning";
-import { getDailyCapacityForDate } from "@/lib/settings";
+import {
+  countRefillCandidateProblems,
+  countUnscheduledNewProblems,
+  getPlannedDateKey,
+  getUpcomingPlan,
+} from "@/lib/planning";
+import { getDailyCapacityForDate, getReservedNewStarts } from "@/lib/settings";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
@@ -17,14 +22,6 @@ import { DailyLeetCodeCard } from "./DailyLeetCodeCard";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
 import { ProblemCard } from "./ProblemCard";
-
-function sortByReviewDate(problems: Problem[]): Problem[] {
-  return [...problems].sort((a, b) => {
-    const aTime = parseDate(a.nextReviewAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    const bTime = parseDate(b.nextReviewAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    return aTime - bTime;
-  });
-}
 
 function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
   const { addProblemFromTemplate, ready } = useLeetLoop();
@@ -150,21 +147,18 @@ export function TodayClient() {
   const { data, isTemplateInQueue, ready, repopulateToday } = useLeetLoop();
   const [refillMessage, setRefillMessage] = useState("");
   const today = new Date();
+  const todayKey = toLocalDateKey(today);
   const dailyCapacity = getDailyCapacityForDate(data, today);
+  const reservedNewStarts = getReservedNewStarts(data.settings);
+  const todayPlanDay = getUpcomingPlan(data, { now: today, days: 1 })[0];
+  const plannedReviews = todayPlanDay?.reviews ?? [];
+  const waitingReviews = todayPlanDay?.waitingReviews ?? [];
+  const plannedNewToday = todayPlanDay?.newStarts ?? [];
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
-  const reviewProblems = activeProblems.filter(isReviewProblem);
-  const overdue = sortByReviewDate(reviewProblems.filter((problem) => isOverdue(problem.nextReviewAt, today)));
-  const dueToday = sortByReviewDate(reviewProblems.filter((problem) => isDueToday(problem.nextReviewAt, today)));
-  const plannedNewToday = sortByReviewDate(
-    activeProblems.filter(
-      (problem) => problem.status === "new" && isDueOnOrBefore(problem.nextReviewAt, today),
-    ),
-  );
   const futurePlannedNewCount = activeProblems.filter(
     (problem) =>
       problem.status === "new" &&
-      problem.nextReviewAt &&
-      !isDueOnOrBefore(problem.nextReviewAt, today),
+      Boolean(getPlannedDateKey(problem) && getPlannedDateKey(problem)! > todayKey),
   ).length;
   const unscheduledNewCount = countUnscheduledNewProblems(data);
   const suggestedTemplates: ProblemTemplate[] = [];
@@ -183,12 +177,13 @@ export function TodayClient() {
   const recentAttempts = [...data.attempts]
     .sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime())
     .slice(0, 5);
-  const readyCount = overdue.length + dueToday.length + plannedNewToday.length;
-  const todayPlan = [...dueToday, ...plannedNewToday];
+  const readyCount = plannedReviews.length + plannedNewToday.length;
+  const todayPlan = [...plannedReviews, ...plannedNewToday];
   const completedToday = getCompletedDailyAttempts(data.attempts, today);
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
-  const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
+  const canRefillToday =
+    readyCount === 0 && waitingReviews.length === 0 && refillCandidateCount > 0;
   const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
   const heroText = readyCount
     ? `${readyCount} of ${dailyPlanTotal} left today`
@@ -201,11 +196,15 @@ export function TodayClient() {
     }
 
     if (completedTodayCount) {
-      return "Nice. Today's planned queue is clear, and completed items stay visible below.";
+      return waitingReviews.length
+        ? `Today's plan is clear. ${waitingReviews.length} waiting review${waitingReviews.length === 1 ? "" : "s"} will roll forward.`
+        : "Nice. Today's planned queue is clear, and completed items stay visible below.";
     }
 
-    if (overdue.length || dueToday.length) {
-      return "Start with overdue work, then clear today's queue.";
+    if (plannedReviews.length) {
+      return waitingReviews.length
+        ? "Start with the oldest planned review. Extra due work is waiting below."
+        : "Start with the oldest review, then clear today's queue.";
     }
 
     if (plannedNewToday.length) {
@@ -286,7 +285,7 @@ export function TodayClient() {
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
           <p className="text-sm text-[var(--muted)]">Reviews left</p>
-          <p className="mt-1 text-2xl font-semibold">{overdue.length + dueToday.length}</p>
+          <p className="mt-1 text-2xl font-semibold">{plannedReviews.length}</p>
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
           <p className="text-sm text-[var(--muted)]">New left</p>
@@ -297,16 +296,7 @@ export function TodayClient() {
       <DailyLeetCodeCard />
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-normal">Overdue</h2>
-        {overdue.length ? (
-          overdue.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
-        ) : (
-          <EmptyState title="Nothing overdue" copy="No missed reviews are waiting." />
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-normal">Due Today</h2>
+        <h2 className="text-xl font-semibold tracking-normal">Today&apos;s Plan</h2>
         {todayPlan.length ? (
           todayPlan.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
         ) : (
@@ -316,6 +306,22 @@ export function TodayClient() {
           />
         )}
       </section>
+
+      {waitingReviews.length ? (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-xl font-semibold tracking-normal">
+              Waiting Reviews ({waitingReviews.length})
+            </h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              These reviews are due, but outside today&apos;s capacity. The oldest roll into the next available plan.
+            </p>
+          </div>
+          {waitingReviews.map((problem) => (
+            <ProblemCard key={problem.id} problem={problem} />
+          ))}
+        </section>
+      ) : null}
 
       {completedToday.length ? (
         <section className="space-y-3">
@@ -334,7 +340,9 @@ export function TodayClient() {
         <section className="rounded-lg border border-[var(--border)] bg-white p-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--muted)]">
-              {`Planned work fills the day up to ${dailyCapacity} items. Done items count toward today's slots.`}
+              {reservedNewStarts
+                ? `Planning reserves up to ${reservedNewStarts} new-start slot${reservedNewStarts === 1 ? "" : "s"} when available. Waiting reviews roll forward.`
+                : `Reviews fill the ${dailyCapacity}-item plan before new starts. Waiting reviews roll forward.`}
             </p>
             <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
               View upcoming

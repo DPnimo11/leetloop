@@ -48,6 +48,7 @@ type AttemptRow = {
 type SettingsRow = {
   user_id: string;
   daily_target: number | null;
+  reserved_new_starts_per_day: number | null;
   extra_daily_capacity: Record<string, number> | null;
 };
 
@@ -135,6 +136,7 @@ function settingsToRow(settings: LeetLoopSettings, userId: string): SettingsRow 
   return {
     user_id: userId,
     daily_target: settings.dailyTarget,
+    reserved_new_starts_per_day: settings.reservedNewStartsPerDay,
     extra_daily_capacity: settings.extraDailyCapacity,
   };
 }
@@ -170,6 +172,7 @@ export async function loadCloudData(
   const settings = settingsRow
     ? normalizeSettings({
         dailyTarget: settingsRow.daily_target ?? undefined,
+        reservedNewStartsPerDay: settingsRow.reserved_new_starts_per_day ?? undefined,
         extraDailyCapacity: settingsRow.extra_daily_capacity ?? {},
       })
     : createDefaultSettings();

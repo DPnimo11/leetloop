@@ -5,6 +5,7 @@ export type LeetLoopStorageVersion = 1;
 
 export type LeetLoopSettings = {
   dailyTarget: number;
+  reservedNewStartsPerDay: number;
   extraDailyCapacity: Record<string, number>;
 };
 

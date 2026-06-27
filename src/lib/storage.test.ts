@@ -45,6 +45,7 @@ describe("storage helpers", () => {
     expect(loaded.problems[0]?.title).toBe("Two Sum");
     expect(loaded.problems[0]?.leetcodeSlug).toBe("two-sum");
     expect(loaded.settings.dailyTarget).toBe(5);
+    expect(loaded.settings.reservedNewStartsPerDay).toBe(1);
   });
 
   it("logs attempts and updates the linked problem schedule", () => {
@@ -145,6 +146,7 @@ describe("storage helpers", () => {
 
     expect(parsed.settings).toEqual({
       dailyTarget: 5,
+      reservedNewStartsPerDay: 1,
       extraDailyCapacity: {},
     });
   });
@@ -157,6 +159,7 @@ describe("storage helpers", () => {
         attempts: [],
         settings: {
           dailyTarget: 99,
+          reservedNewStartsPerDay: 99,
           extraDailyCapacity: {
             "2026-05-18": 3,
             nope: 4,
@@ -168,6 +171,7 @@ describe("storage helpers", () => {
 
     expect(parsed.settings).toEqual({
       dailyTarget: 20,
+      reservedNewStartsPerDay: 20,
       extraDailyCapacity: {
         "2026-05-18": 3,
       },

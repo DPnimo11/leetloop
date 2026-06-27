@@ -1,7 +1,13 @@
 import type { LeetLoopData } from "@/types/storage";
 import type { Problem } from "@/types/problem";
 import { addDays, isDueOnOrBefore, parseDate, startOfLocalDay, toLocalDateKey } from "./dates";
-import { DEFAULT_DAILY_TARGET, getDailyCapacityForDate, getDailyTarget, getExtraDailyCapacity } from "./settings";
+import {
+  DEFAULT_DAILY_TARGET,
+  getDailyCapacityForDate,
+  getDailyTarget,
+  getExtraDailyCapacity,
+  getReservedNewStarts,
+} from "./settings";
 
 export const DAILY_PLAN_CAPACITY = DEFAULT_DAILY_TARGET;
 export const UPCOMING_PLAN_DAYS = 14;
@@ -10,16 +16,10 @@ export type UpcomingPlanDay = {
   date: Date;
   dateKey: string;
   reviews: Problem[];
+  waitingReviews: Problem[];
   newStarts: Problem[];
   completedCount: number;
   load: number;
-  capacity: number;
-};
-
-type PlanDay = {
-  date: Date;
-  dateKey: string;
-  loadIds: Set<string>;
   capacity: number;
 };
 
@@ -109,6 +109,55 @@ export function getCompletedProblemIdsForDate(data: LeetLoopData, date: Date): S
   return completedIds;
 }
 
+function getScheduledReviews(problems: Problem[]): Problem[] {
+  return sortByNextReviewDate(
+    problems.filter((problem) => isReviewProblem(problem) && getPlannedDateKey(problem)),
+  );
+}
+
+function addReviewsDueThrough(
+  scheduledReviews: Problem[],
+  reviewQueue: Problem[],
+  startIndex: number,
+  dateKey: string,
+): number {
+  let nextIndex = startIndex;
+
+  while (nextIndex < scheduledReviews.length) {
+    const problem = scheduledReviews[nextIndex];
+    const reviewDateKey = problem ? getPlannedDateKey(problem) : undefined;
+
+    if (!problem || !reviewDateKey || reviewDateKey > dateKey) {
+      break;
+    }
+
+    reviewQueue.push(problem);
+    nextIndex += 1;
+  }
+
+  return nextIndex;
+}
+
+function getNewStartsForPlanDate(
+  problems: Problem[],
+  dateKey: string,
+  todayKey: string,
+): Problem[] {
+  return sortByCreatedDate(
+    problems.filter((problem) => {
+      if (!isNewProblem(problem)) {
+        return false;
+      }
+
+      const plannedDateKey = getPlannedDateKey(problem);
+
+      return dateKey === todayKey
+        ? Boolean(plannedDateKey && plannedDateKey <= todayKey)
+        : plannedDateKey === dateKey;
+    }),
+  );
+}
+
 export function planNewProblemStarts(
   data: LeetLoopData,
   options: {
@@ -119,60 +168,97 @@ export function planNewProblemStarts(
 ): LeetLoopData {
   const now = options.now ?? new Date();
   const today = startOfLocalDay(now);
+  const todayKey = toLocalDateKey(today);
   const days = options.days ?? UPCOMING_PLAN_DAYS;
-  const planDays: PlanDay[] = Array.from({ length: days }, (_, index) => {
+  const planDays = Array.from({ length: days }, (_, index) => {
     const date = addDays(today, index);
-    const reviews = getReviewsForDate(data.problems, date, today);
-    const completedIds = getCompletedProblemIdsForDate(data, date);
-    const capacity = resolveDailyCapacity(data, date, options.dailyCapacity);
-    const loadIds = new Set<string>([
-      ...reviews.map((problem) => problem.id),
-      ...completedIds,
-    ]);
 
     return {
       date,
       dateKey: toLocalDateKey(date),
-      loadIds,
-      capacity,
+      capacity: resolveDailyCapacity(data, date, options.dailyCapacity),
     };
   });
   const planDayByDateKey = new Map(planDays.map((day) => [day.dateKey, day]));
   const assignments = new Map<string, string>();
   const newProblems = sortByCreatedDate(data.problems.filter(isNewProblem));
+  const floatingNewProblems: Problem[] = [];
+  const lockedNewProblemsByDate = new Map<string, Problem[]>();
 
   for (const problem of newProblems) {
     const currentDateKey = getPlannedDateKey(problem);
 
     if (!currentDateKey) {
+      floatingNewProblems.push(problem);
       continue;
     }
 
-    const day = planDayByDateKey.get(currentDateKey);
-
-    if (!day || day.loadIds.size >= day.capacity) {
-      assignments.set(problem.id, "");
-      continue;
-    }
-
-    day.loadIds.add(problem.id);
-    assignments.set(problem.id, problem.nextReviewAt ?? day.date.toISOString());
-  }
-
-  for (const problem of newProblems) {
-    if (assignments.has(problem.id)) {
-      continue;
-    }
-
-    const day = planDays.find((item) => item.loadIds.size < item.capacity);
+    const normalizedDateKey = currentDateKey < todayKey ? todayKey : currentDateKey;
+    const day = planDayByDateKey.get(normalizedDateKey);
 
     if (!day) {
       assignments.set(problem.id, "");
       continue;
     }
 
-    day.loadIds.add(problem.id);
-    assignments.set(problem.id, day.date.toISOString());
+    const lockedProblems = lockedNewProblemsByDate.get(normalizedDateKey) ?? [];
+    lockedProblems.push(problem);
+    lockedNewProblemsByDate.set(normalizedDateKey, lockedProblems);
+  }
+
+  const scheduledReviews = getScheduledReviews(data.problems);
+  const reviewQueue: Problem[] = [];
+  const reservedNewStarts = getReservedNewStarts(data.settings);
+  let reviewIndex = 0;
+
+  for (const day of planDays) {
+    reviewIndex = addReviewsDueThrough(
+      scheduledReviews,
+      reviewQueue,
+      reviewIndex,
+      day.dateKey,
+    );
+
+    const completedCount = getCompletedProblemIdsForDate(data, day.date).size;
+    const remainingCapacity = Math.max(0, day.capacity - completedCount);
+    const lockedProblems = lockedNewProblemsByDate.get(day.dateKey) ?? [];
+    const reserveCandidateCount =
+      completedCount > 0
+        ? lockedProblems.length
+        : lockedProblems.length + floatingNewProblems.length;
+    const reservedCapacity = Math.min(
+      reservedNewStarts,
+      reserveCandidateCount,
+      remainingCapacity,
+    );
+    const reviewCapacity = Math.max(0, remainingCapacity - reservedCapacity);
+    const plannedReviewCount = Math.min(reviewQueue.length, reviewCapacity);
+    reviewQueue.splice(0, plannedReviewCount);
+
+    const newStartCapacity = remainingCapacity - plannedReviewCount;
+    const preservedLocked = lockedProblems.slice(0, newStartCapacity);
+    const displacedLocked = lockedProblems.slice(newStartCapacity);
+
+    for (const problem of preservedLocked) {
+      const currentDateKey = getPlannedDateKey(problem);
+      assignments.set(
+        problem.id,
+        currentDateKey === day.dateKey
+          ? problem.nextReviewAt ?? day.date.toISOString()
+          : day.date.toISOString(),
+      );
+    }
+
+    const remainingNewStartCapacity = newStartCapacity - preservedLocked.length;
+    const newlyAssigned = floatingNewProblems.splice(0, remainingNewStartCapacity);
+
+    for (const problem of newlyAssigned) {
+      assignments.set(problem.id, day.date.toISOString());
+    }
+
+    if (displacedLocked.length) {
+      floatingNewProblems.unshift(...displacedLocked);
+    }
   }
 
   let changed = false;
@@ -218,31 +304,64 @@ export function getUpcomingPlan(
 ): UpcomingPlanDay[] {
   const now = options.now ?? new Date();
   const today = startOfLocalDay(now);
+  const todayKey = toLocalDateKey(today);
   const days = options.days ?? UPCOMING_PLAN_DAYS;
+  const scheduledReviews = getScheduledReviews(data.problems);
+  const reviewQueue: Problem[] = [];
+  const plan: UpcomingPlanDay[] = [];
+  const reservedNewStarts = getReservedNewStarts(data.settings);
+  let reviewIndex = 0;
 
-  return Array.from({ length: days }, (_, index) => {
+  for (let index = 0; index < days; index += 1) {
     const date = addDays(today, index);
+    const dateKey = toLocalDateKey(date);
     const capacity = resolveDailyCapacity(data, date, options.dailyCapacity);
-    const reviews = getReviewsForDate(data.problems, date, today);
-    const newStarts = getNewStartsForDate(data.problems, date);
+    reviewIndex = addReviewsDueThrough(
+      scheduledReviews,
+      reviewQueue,
+      reviewIndex,
+      dateKey,
+    );
+
+    const allNewStarts = getNewStartsForPlanDate(data.problems, dateKey, todayKey);
+    const completedIds = getCompletedProblemIdsForDate(data, date);
+    const pendingCandidateIds = new Set<string>([
+      ...reviewQueue.map((problem) => problem.id),
+      ...allNewStarts.map((problem) => problem.id),
+    ]);
+    const completedCount = [...completedIds].filter(
+      (problemId) => !pendingCandidateIds.has(problemId),
+    ).length;
+    const remainingCapacity = Math.max(0, capacity - completedCount);
+    const reservedCapacity = Math.min(
+      reservedNewStarts,
+      allNewStarts.length,
+      remainingCapacity,
+    );
+    const reviewCapacity = Math.max(0, remainingCapacity - reservedCapacity);
+    const reviews = reviewQueue.splice(0, reviewCapacity);
+    const newStartCapacity = remainingCapacity - reviews.length;
+    const newStarts = allNewStarts.slice(0, newStartCapacity);
+    const waitingReviews = [...reviewQueue];
     const pendingIds = new Set<string>([
       ...reviews.map((problem) => problem.id),
       ...newStarts.map((problem) => problem.id),
     ]);
-    const completedIds = getCompletedProblemIdsForDate(data, date);
-    const completedCount = [...completedIds].filter((problemId) => !pendingIds.has(problemId)).length;
     const load = pendingIds.size + completedCount;
 
-    return {
+    plan.push({
       date,
-      dateKey: toLocalDateKey(date),
+      dateKey,
       reviews,
+      waitingReviews,
       newStarts,
       completedCount,
       load,
       capacity,
-    };
-  });
+    });
+  }
+
+  return plan;
 }
 
 export function countUnscheduledNewProblems(data: LeetLoopData): number {

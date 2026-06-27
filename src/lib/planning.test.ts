@@ -66,7 +66,7 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[1]?.newStarts).toHaveLength(2);
   });
 
-  it("does not schedule new starts on a day already full of reviews", () => {
+  it("reserves a new-start slot on a day full of reviews", () => {
     const reviews = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) =>
       problem({
         id: `review_${index}`,
@@ -86,9 +86,180 @@ describe("planNewProblemStarts", () => {
     );
     const upcoming = getUpcomingPlan(planned, { now });
 
+    expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 1);
+    expect(upcoming[0]?.newStarts.map((item) => item.id)).toEqual(["new_1"]);
+    expect(upcoming[0]?.waitingReviews).toHaveLength(1);
+    expect(upcoming[1]?.reviews).toHaveLength(1);
+  });
+
+  it("moves extra existing new starts when a review backlog fills the day", () => {
+    const reviews = Array.from({ length: 13 }, (_, index) =>
+      problem({
+        id: `review_${index}`,
+        status: "reviewing",
+        nextReviewAt: "2026-05-19T00:00:00.000Z",
+      }),
+    );
+    const plannedNewStarts = Array.from({ length: 4 }, (_, index) =>
+      problem({
+        id: `new_${index}`,
+        title: `New ${index}`,
+        nextReviewAt: "2026-05-19T00:00:00.000Z",
+      }),
+    );
+    const planned = planNewProblemStarts(data([...reviews, ...plannedNewStarts]), {
+      now,
+    });
+    const upcoming = getUpcomingPlan(planned, { now });
+
+    expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 1);
+    expect(upcoming[0]?.newStarts).toHaveLength(1);
+    expect(upcoming[0]?.waitingReviews).toHaveLength(9);
+  });
+
+  it("lets reviews fill the target when no new problems exist", () => {
+    const planned = planNewProblemStarts(
+      data(
+        Array.from({ length: DAILY_PLAN_CAPACITY + 1 }, (_, index) =>
+          problem({
+            id: `review_${index}`,
+            status: "reviewing",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+        ),
+      ),
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now });
+
+    expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY);
+    expect(upcoming[0]?.newStarts).toHaveLength(0);
+    expect(upcoming[0]?.waitingReviews).toHaveLength(1);
+    expect(upcoming[1]?.reviews).toHaveLength(1);
+    expect(upcoming[1]?.waitingReviews).toHaveLength(0);
+  });
+
+  it("supports reviews-first planning when the reserve is zero", () => {
+    const reviews = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) =>
+      problem({
+        id: `review_${index}`,
+        status: "reviewing",
+        nextReviewAt: "2026-05-19T00:00:00.000Z",
+      }),
+    );
+    const planned = planNewProblemStarts(
+      {
+        ...data([...reviews, problem({ id: "new_1", title: "New 1" })]),
+        settings: {
+          ...createDefaultSettings(),
+          reservedNewStartsPerDay: 0,
+        },
+      },
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now });
+
     expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY);
     expect(upcoming[0]?.newStarts).toHaveLength(0);
     expect(upcoming[1]?.newStarts.map((item) => item.id)).toEqual(["new_1"]);
+  });
+
+  it("uses the only slot for a new start when target and reserve are one", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data([
+          problem({
+            id: "review_1",
+            status: "reviewing",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+          problem({
+            id: "review_2",
+            status: "reviewing",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+          problem({ id: "new_1", title: "New 1" }),
+        ]),
+        settings: {
+          dailyTarget: 1,
+          reservedNewStartsPerDay: 1,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now, days: 3 });
+
+    expect(upcoming[0]?.reviews).toHaveLength(0);
+    expect(upcoming[0]?.newStarts.map((item) => item.id)).toEqual(["new_1"]);
+    expect(upcoming[0]?.waitingReviews).toHaveLength(2);
+    expect(upcoming[1]?.reviews).toHaveLength(1);
+    expect(upcoming[1]?.waitingReviews).toHaveLength(1);
+    expect(upcoming[2]?.reviews).toHaveLength(1);
+    expect(upcoming[2]?.waitingReviews).toHaveLength(0);
+  });
+
+  it("reserves multiple new-start slots when configured", () => {
+    const reviews = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) =>
+      problem({
+        id: `review_${index}`,
+        status: "reviewing",
+        nextReviewAt: "2026-05-19T00:00:00.000Z",
+      }),
+    );
+    const planned = planNewProblemStarts(
+      {
+        ...data([
+          ...reviews,
+          problem({ id: "new_1", title: "New 1" }),
+          problem({ id: "new_2", title: "New 2" }),
+        ]),
+        settings: {
+          ...createDefaultSettings(),
+          reservedNewStartsPerDay: 2,
+        },
+      },
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now });
+
+    expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 2);
+    expect(upcoming[0]?.newStarts).toHaveLength(2);
+    expect(upcoming[0]?.waitingReviews).toHaveLength(2);
+  });
+
+  it("rolls a future review collision forward without changing ideal due dates", () => {
+    const idealReviewDate = "2026-05-20T12:00:00.000Z";
+    const reviews = Array.from({ length: DAILY_PLAN_CAPACITY + 1 }, (_, index) =>
+      problem({
+        id: `review_${index}`,
+        status: "reviewing",
+        nextReviewAt: idealReviewDate,
+      }),
+    );
+    const planned = planNewProblemStarts(
+      data([
+        ...reviews,
+        problem({
+          id: "new_tomorrow",
+          title: "New Tomorrow",
+          nextReviewAt: idealReviewDate,
+        }),
+      ]),
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now, days: 3 });
+
+    expect(upcoming[1]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 1);
+    expect(upcoming[1]?.newStarts.map((item) => item.id)).toEqual(["new_tomorrow"]);
+    expect(upcoming[1]?.waitingReviews).toHaveLength(2);
+    expect(upcoming[2]?.reviews).toHaveLength(2);
+    expect(upcoming[2]?.waitingReviews).toHaveLength(0);
+    expect(
+      planned.problems
+        .filter((item) => item.id.startsWith("review_"))
+        .every((item) => item.nextReviewAt === idealReviewDate),
+    ).toBe(true);
   });
 
   it("clears new problems that do not fit inside the planning window", () => {
@@ -280,6 +451,7 @@ describe("planNewProblemStarts", () => {
         ),
         settings: {
           dailyTarget: 2,
+          reservedNewStartsPerDay: 1,
           extraDailyCapacity: {},
         },
       },

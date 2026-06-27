@@ -4,6 +4,7 @@ import { toLocalDateKey } from "./dates";
 export const DEFAULT_DAILY_TARGET = 5;
 export const MIN_DAILY_TARGET = 1;
 export const MAX_DAILY_TARGET = 20;
+export const DEFAULT_RESERVED_NEW_STARTS = 1;
 
 const MAX_EXTRA_DAILY_CAPACITY = 100;
 
@@ -17,6 +18,10 @@ function clampInteger(value: number, min: number, max: number): number {
 
 export function clampDailyTarget(value: number): number {
   return clampInteger(value, MIN_DAILY_TARGET, MAX_DAILY_TARGET);
+}
+
+export function clampReservedNewStarts(value: number, dailyTarget = DEFAULT_DAILY_TARGET): number {
+  return clampInteger(value, 0, clampDailyTarget(dailyTarget));
 }
 
 function normalizeExtraDailyCapacity(value: unknown): Record<string, number> {
@@ -38,6 +43,7 @@ function normalizeExtraDailyCapacity(value: unknown): Record<string, number> {
 export function createDefaultSettings(): LeetLoopSettings {
   return {
     dailyTarget: DEFAULT_DAILY_TARGET,
+    reservedNewStartsPerDay: DEFAULT_RESERVED_NEW_STARTS,
     extraDailyCapacity: {},
   };
 }
@@ -49,14 +55,27 @@ export function normalizeSettings(value: unknown): LeetLoopSettings {
 
   const candidate = value as Partial<LeetLoopSettings>;
 
+  const dailyTarget = clampDailyTarget(Number(candidate.dailyTarget ?? DEFAULT_DAILY_TARGET));
+
   return {
-    dailyTarget: clampDailyTarget(Number(candidate.dailyTarget ?? DEFAULT_DAILY_TARGET)),
+    dailyTarget,
+    reservedNewStartsPerDay: clampReservedNewStarts(
+      Number(candidate.reservedNewStartsPerDay ?? DEFAULT_RESERVED_NEW_STARTS),
+      dailyTarget,
+    ),
     extraDailyCapacity: normalizeExtraDailyCapacity(candidate.extraDailyCapacity),
   };
 }
 
 export function getDailyTarget(settings?: Partial<LeetLoopSettings>): number {
   return clampDailyTarget(Number(settings?.dailyTarget ?? DEFAULT_DAILY_TARGET));
+}
+
+export function getReservedNewStarts(settings?: Partial<LeetLoopSettings>): number {
+  return clampReservedNewStarts(
+    Number(settings?.reservedNewStartsPerDay ?? DEFAULT_RESERVED_NEW_STARTS),
+    getDailyTarget(settings),
+  );
 }
 
 export function getExtraDailyCapacity(settings: Partial<LeetLoopSettings> | undefined, dateKey: string): number {
