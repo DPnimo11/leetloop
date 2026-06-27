@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, LogOut, Settings, UserCircle } from "lucide-react";
+import { ChartNoAxesCombined, ChevronDown, LogOut, Settings, UserCircle } from "lucide-react";
 
 type AccountMenuProps = {
   avatarUrl?: string;
@@ -81,6 +81,15 @@ export function AccountMenu({ avatarUrl, email, name }: AccountMenuProps) {
           </div>
 
           <div className="p-1">
+            <Link
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-[#344054] hover:bg-[var(--surface-subtle)]"
+              href="/analytics"
+              onClick={() => setOpen(false)}
+              role="menuitem"
+            >
+              <ChartNoAxesCombined aria-hidden="true" size={16} />
+              Analytics
+            </Link>
             <Link
               className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-[#344054] hover:bg-[var(--surface-subtle)]"
               href="/settings"
