@@ -2,6 +2,7 @@
 
 import { SHAKY_ATTEMPT_RESULTS, type AttemptResult } from "@/types/attempt";
 import { isDueToday, isOverdue } from "@/lib/dates";
+import { isProblemAvailable } from "@/lib/availability";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
 
@@ -29,8 +30,12 @@ export function AnalyticsClient() {
   const { data, ready } = useLeetLoop();
   const today = new Date();
   const attemptedProblemIds = new Set(data.attempts.map((attempt) => attempt.problemId));
-  const dueToday = data.problems.filter((problem) => isDueToday(problem.nextReviewAt, today)).length;
-  const overdue = data.problems.filter((problem) => isOverdue(problem.nextReviewAt, today)).length;
+  const dueToday = data.problems.filter(
+    (problem) => isProblemAvailable(problem, today) && isDueToday(problem.nextReviewAt, today),
+  ).length;
+  const overdue = data.problems.filter(
+    (problem) => isProblemAvailable(problem, today) && isOverdue(problem.nextReviewAt, today),
+  ).length;
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const shakyResults = new Set<AttemptResult>(SHAKY_ATTEMPT_RESULTS);
   const patternStats = new Map<string, PatternStat>();

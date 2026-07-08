@@ -1,5 +1,6 @@
-import type { Difficulty, ProblemStatus } from "@/types/problem";
-import { DIFFICULTY_STYLES, STATUS_LABELS, STATUS_STYLES } from "@/lib/format";
+import type { Difficulty, Problem, ProblemStatus } from "@/types/problem";
+import { DIFFICULTY_STYLES, formatDate, STATUS_LABELS, STATUS_STYLES } from "@/lib/format";
+import { getProblemAvailability } from "@/lib/availability";
 
 export function DifficultyBadge({ difficulty }: { difficulty: Difficulty }) {
   return (
@@ -13,6 +14,22 @@ export function StatusBadge({ status }: { status: ProblemStatus }) {
   return (
     <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[status]}`}>
       {STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+export function AvailabilityBadge({ problem }: { problem: Problem }) {
+  const availability = getProblemAvailability(problem);
+
+  if (availability === "available") {
+    return null;
+  }
+
+  return (
+    <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+      {availability === "paused"
+        ? "Paused"
+        : `Snoozed until ${formatDate(problem.snoozedUntil)}`}
     </span>
   );
 }

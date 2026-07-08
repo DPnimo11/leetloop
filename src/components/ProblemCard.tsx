@@ -6,11 +6,14 @@ import { ExternalLink, History } from "lucide-react";
 import type { Problem } from "@/types/problem";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { formatAttemptResult, formatDate } from "@/lib/format";
-import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { isProblemAvailable } from "@/lib/availability";
+import { AvailabilityBadge, DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { AttemptModal } from "./AttemptModal";
+import { SnoozeMenu } from "./SnoozeMenu";
 
 export function ProblemCard({ problem }: { problem: Problem }) {
   const [logging, setLogging] = useState(false);
+  const available = isProblemAvailable(problem);
 
   return (
     <article className="rounded-lg border border-[var(--border)] bg-white p-4">
@@ -25,7 +28,10 @@ export function ProblemCard({ problem }: { problem: Problem }) {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={problem.difficulty} />
             <StatusBadge status={problem.status} />
-            <span className="text-sm text-[var(--muted)]">Planned: {formatDate(problem.nextReviewAt)}</span>
+            <AvailabilityBadge problem={problem} />
+            {available ? (
+              <span className="text-sm text-[var(--muted)]">Planned: {formatDate(problem.nextReviewAt)}</span>
+            ) : null}
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {problem.patterns.slice(0, 5).map((tag) => (
@@ -38,6 +44,7 @@ export function ProblemCard({ problem }: { problem: Problem }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
+          <SnoozeMenu problem={problem} />
           <a
             className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
             href={leetLoopReviewUrl(problem.url)}

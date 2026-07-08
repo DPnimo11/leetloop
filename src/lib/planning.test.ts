@@ -4,6 +4,7 @@ import type { Problem } from "@/types/problem";
 import type { LeetLoopData } from "@/types/storage";
 import { createDefaultSettings } from "./settings";
 import { DAILY_PLAN_CAPACITY, getUpcomingPlan, planNewProblemStarts, refillTodayPlan } from "./planning";
+import { snoozeProblem } from "./storage";
 
 const now = new Date("2026-05-19T12:00:00.000Z");
 
@@ -324,6 +325,96 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[0]?.reviews[0]?.id).toBe("older_1");
     expect(upcoming[1]?.reviews[0]?.id).toBe("older_2");
     expect(upcoming[2]?.reviews[0]?.id).toBe("newer");
+  });
+
+  it("keeps a snoozed today's slot consumed without backfilling the queue", () => {
+    const initial = {
+      ...data(
+        Array.from({ length: 3 }, (_, index) =>
+          problem({
+            id: `review_${index}`,
+            status: "reviewing",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+        ),
+      ),
+      settings: {
+        dailyTarget: 2,
+        reservedNewStartsPerDay: 0,
+        extraDailyCapacity: {},
+      },
+    };
+    const planned = planNewProblemStarts(initial, { now });
+    const snoozedId = getUpcomingPlan(planned, { now, days: 1 })[0]?.reviews[0]?.id;
+    const snoozed = snoozeProblem(planned, snoozedId ?? "review_0", {
+      now,
+      until: new Date("2026-05-22T00:00:00.000Z"),
+      consumePlanSlot: true,
+    });
+    const replanned = planNewProblemStarts(snoozed, { now });
+    const todayPlan = getUpcomingPlan(replanned, { now, days: 1 })[0];
+
+    expect(todayPlan?.reviews).toHaveLength(1);
+    expect(todayPlan?.deferredCount).toBe(1);
+    expect(todayPlan?.load).toBe(2);
+    expect(todayPlan?.reviews.some((item) => item.id === snoozedId)).toBe(false);
+  });
+
+  it("lets reviews use capacity reserved for a snoozed new problem", () => {
+    const pausedNew = snoozeProblem(
+      data([
+        problem({
+          id: "review_1",
+          status: "reviewing",
+          nextReviewAt: "2026-05-19T00:00:00.000Z",
+        }),
+        problem({ id: "new_1" }),
+      ]),
+      "new_1",
+      { now },
+    );
+    const planned = planNewProblemStarts(
+      {
+        ...pausedNew,
+        settings: {
+          dailyTarget: 1,
+          reservedNewStartsPerDay: 1,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const todayPlan = getUpcomingPlan(planned, { now, days: 1 })[0];
+
+    expect(todayPlan?.reviews.map((item) => item.id)).toEqual(["review_1"]);
+    expect(todayPlan?.newStarts).toHaveLength(0);
+  });
+
+  it("automatically wakes an expired snooze and preserves its ideal date", () => {
+    const idealReviewAt = "2026-05-19T00:00:00.000Z";
+    const snoozed = snoozeProblem(
+      data([
+        problem({
+          id: "review_1",
+          status: "reviewing",
+          idealReviewAt,
+          nextReviewAt: idealReviewAt,
+        }),
+      ]),
+      "review_1",
+      {
+        now,
+        until: new Date("2026-05-20T00:00:00.000Z"),
+      },
+    );
+    const wakeTime = new Date("2026-05-20T12:00:00.000Z");
+    const planned = planNewProblemStarts(snoozed, { now: wakeTime });
+    const review = planned.problems[0];
+
+    expect(review?.snoozedAt).toBeUndefined();
+    expect(review?.snoozedUntil).toBeUndefined();
+    expect(review?.idealReviewAt).toBe(idealReviewAt);
+    expect(review?.nextReviewAt?.slice(0, 10)).toBe("2026-05-20");
   });
 
   it("clears new problems that do not fit inside the planning window", () => {

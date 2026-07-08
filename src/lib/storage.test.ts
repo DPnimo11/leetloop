@@ -13,6 +13,8 @@ import {
   importData,
   logAttempt,
   parseLeetLoopData,
+  resumeProblem,
+  snoozeProblem,
 } from "./storage";
 import type { ProblemTemplate } from "@/types/problem-set";
 
@@ -122,6 +124,61 @@ describe("storage helpers", () => {
     );
 
     expect(result.attempt.plannedForDate).toBeUndefined();
+  });
+
+  it("snoozes and resumes a problem without changing its review dates", () => {
+    const { data, problem } = addProblem(createEmptyData(now), createProblemInputFromTemplate(template), {
+      now,
+      idFactory: () => "problem_1",
+    });
+    const reviewProblem = {
+      ...problem,
+      status: "reviewing" as const,
+      idealReviewAt: "2026-05-18T09:00:00.000Z",
+      nextReviewAt: "2026-05-18T09:00:00.000Z",
+    };
+    const snoozed = snoozeProblem(
+      { ...data, problems: [reviewProblem] },
+      problem.id,
+      {
+        now,
+        until: new Date("2026-05-21T00:00:00.000Z"),
+        consumePlanSlot: true,
+      },
+    );
+
+    expect(snoozed.problems[0]).toMatchObject({
+      snoozedAt: now.toISOString(),
+      snoozedUntil: "2026-05-21T00:00:00.000Z",
+      planSlotConsumedOn: "2026-05-18",
+      idealReviewAt: reviewProblem.idealReviewAt,
+      nextReviewAt: reviewProblem.nextReviewAt,
+    });
+
+    const resumed = resumeProblem(snoozed, problem.id, now);
+    expect(resumed.problems[0]?.snoozedAt).toBeUndefined();
+    expect(resumed.problems[0]?.snoozedUntil).toBeUndefined();
+    expect(resumed.problems[0]?.planSlotConsumedOn).toBe("2026-05-18");
+  });
+
+  it("clears snooze state when a problem is attempted", () => {
+    const { data, problem } = addProblem(createEmptyData(now), createProblemInputFromTemplate(template), {
+      now,
+      idFactory: () => "problem_1",
+    });
+    const snoozed = snoozeProblem(data, problem.id, {
+      now,
+      until: new Date("2026-05-21T00:00:00.000Z"),
+    });
+    const result = logAttempt(
+      snoozed,
+      problem.id,
+      { result: "solved_clean" },
+      { now, idFactory: () => "attempt_1" },
+    );
+
+    expect(result.problem.snoozedAt).toBeUndefined();
+    expect(result.problem.snoozedUntil).toBeUndefined();
   });
 
   it("round-trips JSON export/import", () => {

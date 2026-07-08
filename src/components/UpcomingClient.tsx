@@ -7,9 +7,10 @@ import { formatDate } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { getDailyTarget, getReservedNewStarts } from "@/lib/settings";
 import type { Problem } from "@/types/problem";
-import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { AvailabilityBadge, DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
+import { SnoozeMenu } from "./SnoozeMenu";
 
 function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new" }) {
   const idealDate = problem.idealReviewAt;
@@ -29,6 +30,7 @@ function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new
             </Link>
             <DifficultyBadge difficulty={problem.difficulty} />
             <StatusBadge status={problem.status} />
+            <AvailabilityBadge problem={problem} />
             <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-semibold text-[var(--muted)]">
               {kind === "review" ? "Review" : "Start"}
             </span>
@@ -44,14 +46,17 @@ function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new
             </p>
           ) : null}
         </div>
-        <a
-          className="text-sm font-semibold text-[var(--accent-strong)] hover:underline"
-          href={leetLoopReviewUrl(problem.url)}
-          rel="noreferrer"
-          target="_blank"
-        >
-          Open
-        </a>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <SnoozeMenu problem={problem} />
+          <a
+            className="text-sm font-semibold text-[var(--accent-strong)] hover:underline"
+            href={leetLoopReviewUrl(problem.url)}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open
+          </a>
+        </div>
       </div>
     </div>
   );
@@ -118,6 +123,11 @@ export function UpcomingClient() {
                   <span className="rounded-full border border-[var(--border)] bg-white px-2 py-1">
                     {day.completedCount} done
                   </span>
+                  {day.deferredCount ? (
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-indigo-700">
+                      {day.deferredCount} deferred
+                    </span>
+                  ) : null}
                   <span className="rounded-full border border-[var(--border)] bg-white px-2 py-1">
                     {openSlots} open
                   </span>

@@ -22,6 +22,9 @@ export type Problem = {
   lastAttemptedAt?: string;
   idealReviewAt?: string;
   nextReviewAt?: string;
+  snoozedAt?: string;
+  snoozedUntil?: string;
+  planSlotConsumedOn?: string;
   reviewCount: number;
   cleanStreak: number;
   lastResult?: AttemptResult;

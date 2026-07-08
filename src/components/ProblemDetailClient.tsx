@@ -7,10 +7,12 @@ import { ArrowLeft, ExternalLink, History, Save, Trash2 } from "lucide-react";
 import { formatAttemptResult, formatDate, formatDateTime, STATUS_LABELS } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { getProblemSetName } from "@/lib/problemSets";
-import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { getProblemAvailability } from "@/lib/availability";
+import { AvailabilityBadge, DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { AttemptModal } from "./AttemptModal";
 import { useLeetLoop } from "./LeetLoopProvider";
+import { SnoozeMenu } from "./SnoozeMenu";
 
 export function ProblemDetailClient({ problemId }: { problemId: string }) {
   const router = useRouter();
@@ -38,6 +40,7 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
   const currentProblem = problem;
   const noteValue = notesDraft?.problemId === currentProblem.id ? notesDraft.value : (currentProblem.notes ?? "");
   const sourceSets = currentProblem.sourceSetSlugs?.map(getProblemSetName) ?? [];
+  const availability = getProblemAvailability(currentProblem);
   const planDiffersFromIdeal =
     currentProblem.idealReviewAt &&
     formatDate(currentProblem.idealReviewAt) !== formatDate(currentProblem.nextReviewAt);
@@ -64,6 +67,7 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
             <div className="flex flex-wrap items-center gap-2">
               <DifficultyBadge difficulty={currentProblem.difficulty} />
               <StatusBadge status={currentProblem.status} />
+              <AvailabilityBadge problem={currentProblem} />
               {sourceSets.map((set) => (
                 <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-semibold text-[var(--muted)]" key={set}>
                   {set}
@@ -79,6 +83,7 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <SnoozeMenu problem={currentProblem} />
             <a
               className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
               href={leetLoopReviewUrl(currentProblem.url)}
@@ -101,9 +106,17 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
 
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-md bg-[var(--surface-subtle)] p-3">
-            <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--muted)]">Planned review</dt>
-            <dd className="mt-1 text-sm font-semibold">{formatDate(currentProblem.nextReviewAt)}</dd>
-            {planDiffersFromIdeal ? (
+            <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--muted)]">
+              {availability === "available" ? "Planned review" : "Availability"}
+            </dt>
+            <dd className="mt-1 text-sm font-semibold">
+              {availability === "paused"
+                ? "Paused indefinitely"
+                : availability === "snoozed"
+                  ? `Snoozed until ${formatDate(currentProblem.snoozedUntil)}`
+                  : formatDate(currentProblem.nextReviewAt)}
+            </dd>
+            {availability === "available" && planDiffersFromIdeal ? (
               <dd className="mt-1 text-xs text-[var(--muted)]">
                 Ideal {formatDate(currentProblem.idealReviewAt)}
               </dd>

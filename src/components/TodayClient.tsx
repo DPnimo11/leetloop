@@ -153,6 +153,7 @@ export function TodayClient() {
   const todayPlanDay = getUpcomingPlan(data, { now: today, days: 1 })[0];
   const plannedReviews = todayPlanDay?.reviews ?? [];
   const plannedNewToday = todayPlanDay?.newStarts ?? [];
+  const deferredTodayCount = todayPlanDay?.deferredCount ?? 0;
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const futurePlannedNewCount = activeProblems.filter(
     (problem) =>
@@ -181,11 +182,12 @@ export function TodayClient() {
   const completedToday = getCompletedDailyAttempts(data.attempts, today);
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
-  const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
+  const canRefillToday =
+    readyCount === 0 && deferredTodayCount === 0 && refillCandidateCount > 0;
   const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
   const heroText = readyCount
     ? `${readyCount} of ${dailyPlanTotal} left today`
-    : completedTodayCount
+    : completedTodayCount || deferredTodayCount
       ? "Daily plan complete"
       : "No reviews due today";
   const heroCopy = (() => {
@@ -195,6 +197,10 @@ export function TodayClient() {
 
     if (completedTodayCount) {
       return "Nice. Today's planned queue is clear, and completed items stay visible below.";
+    }
+
+    if (deferredTodayCount) {
+      return "Snoozed work keeps its slot today, so the rest of the plan stays put.";
     }
 
     if (plannedReviews.length) {
@@ -209,9 +215,11 @@ export function TodayClient() {
   })();
   const emptyTodayCopy = completedTodayCount
     ? "Completed planned work stays visible in Done Today."
-    : futurePlannedNewCount
-      ? "Your new starts are planned for upcoming days."
-      : "Add a new problem or review a weak pattern.";
+    : deferredTodayCount
+      ? "Snoozed work keeps its slot today, so nothing backfills unexpectedly."
+      : futurePlannedNewCount
+        ? "Your new starts are planned for upcoming days."
+        : "Add a new problem or review a weak pattern.";
 
   if (!ready) {
     return <EmptyState title="Loading queue" copy="Your data is loading." />;
@@ -295,7 +303,7 @@ export function TodayClient() {
           todayPlan.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
         ) : (
           <EmptyState
-            title={completedTodayCount ? "Daily plan complete" : "No work due today"}
+            title={completedTodayCount || deferredTodayCount ? "Daily plan complete" : "No work due today"}
             copy={emptyTodayCopy}
           />
         )}
@@ -314,7 +322,7 @@ export function TodayClient() {
         </section>
       ) : null}
 
-      {todayPlan.length || completedToday.length ? (
+      {todayPlan.length || completedToday.length || deferredTodayCount ? (
         <section className="rounded-lg border border-[var(--border)] bg-white p-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--muted)]">
@@ -329,7 +337,7 @@ export function TodayClient() {
         </section>
       ) : null}
 
-      {!todayPlan.length && !completedToday.length && suggestedTemplates.length ? (
+      {!todayPlan.length && !completedToday.length && !deferredTodayCount && suggestedTemplates.length ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold tracking-normal">Suggested New</h2>
           {suggestedTemplates.map((template) => (
@@ -338,7 +346,7 @@ export function TodayClient() {
         </section>
       ) : null}
 
-      {!todayPlan.length && !completedToday.length && !suggestedTemplates.length && unscheduledNewCount ? (
+      {!todayPlan.length && !completedToday.length && !deferredTodayCount && !suggestedTemplates.length && unscheduledNewCount ? (
         <EmptyState
           title="Upcoming plan is full"
           copy="More new problems will be scheduled as space opens."

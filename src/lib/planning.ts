@@ -1,6 +1,7 @@
 import type { LeetLoopData } from "@/types/storage";
 import type { Problem } from "@/types/problem";
 import { addDays, parseDate, startOfLocalDay, toLocalDateKey } from "./dates";
+import { hasExpiredSnooze, isProblemAvailable } from "./availability";
 import {
   DEFAULT_DAILY_TARGET,
   getDailyCapacityForDate,
@@ -18,6 +19,7 @@ export type UpcomingPlanDay = {
   reviews: Problem[];
   newStarts: Problem[];
   completedCount: number;
+  deferredCount: number;
   load: number;
   capacity: number;
 };
@@ -27,6 +29,7 @@ type MutablePlanDay = {
   dateKey: string;
   capacity: number;
   completedCount: number;
+  deferredCount: number;
   newSlots: number;
   reviews: Problem[];
 };
@@ -96,6 +99,10 @@ export function getReviewsForDate(problems: Problem[], date: Date, today = new D
         return false;
       }
 
+      if (!isProblemAvailable(problem, today)) {
+        return false;
+      }
+
       const plannedDateKey = getPlannedDateKey(problem);
       return dateKey === todayKey
         ? Boolean(plannedDateKey && plannedDateKey <= todayKey)
@@ -111,6 +118,10 @@ export function getNewStartsForDate(problems: Problem[], date: Date, today = new
   return sortByCreatedDate(
     problems.filter((problem) => {
       if (!isNewProblem(problem)) {
+        return false;
+      }
+
+      if (!isProblemAvailable(problem, today)) {
         return false;
       }
 
@@ -135,16 +146,30 @@ export function getCompletedProblemIdsForDate(data: LeetLoopData, date: Date): S
   return completedIds;
 }
 
+export function getDeferredProblemIdsForDate(data: LeetLoopData, date: Date): Set<string> {
+  const dateKey = toLocalDateKey(date);
+
+  return new Set(
+    data.problems
+      .filter((problem) => problem.planSlotConsumedOn === dateKey)
+      .map((problem) => problem.id),
+  );
+}
+
 function createMutablePlanDay(
   data: LeetLoopData,
   date: Date,
   dailyCapacity?: number,
 ): MutablePlanDay {
+  const completedIds = getCompletedProblemIdsForDate(data, date);
+  const deferredIds = getDeferredProblemIdsForDate(data, date);
+
   return {
     date,
     dateKey: toLocalDateKey(date),
     capacity: resolveDailyCapacity(data, date, dailyCapacity),
-    completedCount: getCompletedProblemIdsForDate(data, date).size,
+    completedCount: completedIds.size,
+    deferredCount: [...deferredIds].filter((problemId) => !completedIds.has(problemId)).length,
     newSlots: 0,
     reviews: [],
   };
@@ -153,7 +178,7 @@ function createMutablePlanDay(
 function remainingReviewCapacity(day: MutablePlanDay): number {
   return Math.max(
     0,
-    day.capacity - day.completedCount - day.newSlots - day.reviews.length,
+    day.capacity - day.completedCount - day.deferredCount - day.newSlots - day.reviews.length,
   );
 }
 
@@ -162,7 +187,12 @@ function dayUtilization(day: MutablePlanDay): number {
     return 1;
   }
 
-  return (day.completedCount + day.newSlots + day.reviews.length) / day.capacity;
+  return (
+    day.completedCount +
+    day.deferredCount +
+    day.newSlots +
+    day.reviews.length
+  ) / day.capacity;
 }
 
 /**
@@ -183,10 +213,15 @@ export function planDailyWork(
   const today = startOfLocalDay(now);
   const todayKey = toLocalDateKey(today);
   const newStartPlanningDays = options.days ?? UPCOMING_PLAN_DAYS;
-  const newProblems = sortByCreatedDate(data.problems.filter(isNewProblem));
+  const newProblems = sortByCreatedDate(
+    data.problems.filter((problem) => isNewProblem(problem) && isProblemAvailable(problem, now)),
+  );
   const reviewProblems = sortByIdealReviewDate(
     data.problems.filter(
-      (problem) => isReviewProblem(problem) && Boolean(getIdealReviewDateKey(problem)),
+      (problem) =>
+        isReviewProblem(problem) &&
+        isProblemAvailable(problem, now) &&
+        Boolean(getIdealReviewDateKey(problem)),
     ),
   );
   const planDays: MutablePlanDay[] = [];
@@ -212,7 +247,7 @@ export function planDailyWork(
 
   for (let index = 0; index < newStartPlanningDays && unreservedNewCount > 0; index += 1) {
     const day = ensureDay(index);
-    const available = Math.max(0, day.capacity - day.completedCount);
+    const available = Math.max(0, day.capacity - day.completedCount - day.deferredCount);
     const reserved = Math.min(reservedNewStarts, unreservedNewCount, available);
     day.newSlots = reserved;
     unreservedNewCount -= reserved;
@@ -301,7 +336,10 @@ export function planDailyWork(
       ? planDays.slice(0, newStartPlanningDays).find((item) => item.dateKey === normalizedDateKey)
       : undefined;
 
-    if (day && day.completedCount + day.reviews.length + day.newSlots < day.capacity) {
+    if (
+      day &&
+      day.completedCount + day.deferredCount + day.reviews.length + day.newSlots < day.capacity
+    ) {
       newAssignments.set(
         problem.id,
         currentDateKey === normalizedDateKey
@@ -317,7 +355,7 @@ export function planDailyWork(
 
   for (const day of planDays.slice(0, newStartPlanningDays)) {
     while (
-      day.completedCount + day.reviews.length + day.newSlots < day.capacity &&
+      day.completedCount + day.deferredCount + day.reviews.length + day.newSlots < day.capacity &&
       floatingNewProblems.length > 0
     ) {
       const problem = floatingNewProblems.shift()!;
@@ -331,29 +369,62 @@ export function planDailyWork(
   let changed = false;
   const updatedAt = now.toISOString();
   const problems = data.problems.map((problem) => {
-    if (isReviewProblem(problem)) {
-      const idealReviewAt = getIdealReviewAt(problem);
-      const nextReviewAt = reviewAssignments.get(problem.id) ?? problem.nextReviewAt;
+    const expiredSnooze = hasExpiredSnooze(problem, now);
+    const staleConsumedSlot = Boolean(
+      problem.planSlotConsumedOn && problem.planSlotConsumedOn < todayKey,
+    );
+    const currentProblem = expiredSnooze || staleConsumedSlot
+      ? {
+          ...problem,
+          snoozedAt: expiredSnooze ? undefined : problem.snoozedAt,
+          snoozedUntil: expiredSnooze ? undefined : problem.snoozedUntil,
+          planSlotConsumedOn: staleConsumedSlot ? undefined : problem.planSlotConsumedOn,
+        }
+      : problem;
 
-      if (problem.idealReviewAt === idealReviewAt && problem.nextReviewAt === nextReviewAt) {
-        return problem;
+    if (currentProblem !== problem) {
+      changed = true;
+    }
+
+    if (isReviewProblem(currentProblem)) {
+      if (!isProblemAvailable(currentProblem, now)) {
+        return currentProblem;
+      }
+
+      const idealReviewAt = getIdealReviewAt(currentProblem);
+      const nextReviewAt = reviewAssignments.get(currentProblem.id) ?? currentProblem.nextReviewAt;
+
+      if (
+        currentProblem.idealReviewAt === idealReviewAt &&
+        currentProblem.nextReviewAt === nextReviewAt &&
+        currentProblem === problem
+      ) {
+        return currentProblem;
       }
 
       changed = true;
-      return { ...problem, idealReviewAt, nextReviewAt, updatedAt };
+      return { ...currentProblem, idealReviewAt, nextReviewAt, updatedAt };
     }
 
-    if (isNewProblem(problem)) {
-      const nextReviewAt = newAssignments.get(problem.id);
-      if (problem.nextReviewAt === nextReviewAt && problem.idealReviewAt === undefined) {
-        return problem;
+    if (isNewProblem(currentProblem)) {
+      if (!isProblemAvailable(currentProblem, now)) {
+        return currentProblem;
+      }
+
+      const nextReviewAt = newAssignments.get(currentProblem.id);
+      if (
+        currentProblem.nextReviewAt === nextReviewAt &&
+        currentProblem.idealReviewAt === undefined &&
+        currentProblem === problem
+      ) {
+        return currentProblem;
       }
 
       changed = true;
-      return { ...problem, idealReviewAt: undefined, nextReviewAt, updatedAt };
+      return { ...currentProblem, idealReviewAt: undefined, nextReviewAt, updatedAt };
     }
 
-    return problem;
+    return currentProblem;
   });
 
   if (!changed) {
@@ -387,14 +458,16 @@ export function getUpcomingPlan(
 
   for (let index = 0; index < days; index += 1) {
     const date = addDays(today, index);
-    const reviews = getReviewsForDate(data.problems, date, today);
-    const newStarts = getNewStartsForDate(data.problems, date, today);
+    const reviews = getReviewsForDate(data.problems, date, now);
+    const newStarts = getNewStartsForDate(data.problems, date, now);
     const completedIds = getCompletedProblemIdsForDate(data, date);
+    const deferredIds = getDeferredProblemIdsForDate(data, date);
     const pendingIds = new Set([
       ...reviews.map((problem) => problem.id),
       ...newStarts.map((problem) => problem.id),
     ]);
     const completedCount = [...completedIds].filter((problemId) => !pendingIds.has(problemId)).length;
+    const deferredCount = [...deferredIds].filter((problemId) => !completedIds.has(problemId)).length;
     const capacity = resolveDailyCapacity(data, date, options.dailyCapacity);
 
     plan.push({
@@ -403,7 +476,8 @@ export function getUpcomingPlan(
       reviews,
       newStarts,
       completedCount,
-      load: pendingIds.size + completedCount,
+      deferredCount,
+      load: pendingIds.size + completedCount + deferredCount,
       capacity,
     });
   }
@@ -411,8 +485,10 @@ export function getUpcomingPlan(
   return plan;
 }
 
-export function countUnscheduledNewProblems(data: LeetLoopData): number {
-  return data.problems.filter((problem) => isNewProblem(problem) && !problem.nextReviewAt).length;
+export function countUnscheduledNewProblems(data: LeetLoopData, now = new Date()): number {
+  return data.problems.filter(
+    (problem) => isNewProblem(problem) && isProblemAvailable(problem, now) && !problem.nextReviewAt,
+  ).length;
 }
 
 export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Problem[] {
@@ -420,7 +496,10 @@ export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Prob
 
   return sortByPlanThenCreatedDate(
     data.problems.filter(
-      (problem) => isNewProblem(problem) && getPlannedDateKey(problem) !== dateKey,
+      (problem) =>
+        isNewProblem(problem) &&
+        isProblemAvailable(problem, date) &&
+        getPlannedDateKey(problem) !== dateKey,
     ),
   );
 }

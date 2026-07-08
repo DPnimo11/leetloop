@@ -19,6 +19,12 @@ export type MutationOptions = {
   idFactory?: IdFactory;
 };
 
+export type SnoozeProblemOptions = {
+  now?: Date;
+  until?: Date;
+  consumePlanSlot?: boolean;
+};
+
 export function createEmptyData(now = new Date()): LeetLoopData {
   return {
     version: STORAGE_VERSION,
@@ -157,6 +163,61 @@ export function deleteProblem(data: LeetLoopData, problemId: string, now = new D
   );
 }
 
+export function snoozeProblem(
+  data: LeetLoopData,
+  problemId: string,
+  options: SnoozeProblemOptions = {},
+): LeetLoopData {
+  const now = options.now ?? new Date();
+  const nowIso = now.toISOString();
+  const untilIso = options.until?.toISOString();
+  let changed = false;
+
+  const problems = data.problems.map((problem) => {
+    if (problem.id !== problemId || problem.status === "retired") {
+      return problem;
+    }
+
+    changed = true;
+    return {
+      ...problem,
+      snoozedAt: nowIso,
+      snoozedUntil: untilIso,
+      planSlotConsumedOn: options.consumePlanSlot
+        ? toLocalDateKey(now)
+        : problem.planSlotConsumedOn,
+      updatedAt: nowIso,
+    };
+  });
+
+  return changed ? touchData({ ...data, problems }, now) : data;
+}
+
+export function resumeProblem(
+  data: LeetLoopData,
+  problemId: string,
+  now = new Date(),
+): LeetLoopData {
+  const nowIso = now.toISOString();
+  let changed = false;
+
+  const problems = data.problems.map((problem) => {
+    if (problem.id !== problemId || !problem.snoozedAt) {
+      return problem;
+    }
+
+    changed = true;
+    return {
+      ...problem,
+      snoozedAt: undefined,
+      snoozedUntil: undefined,
+      updatedAt: nowIso,
+    };
+  });
+
+  return changed ? touchData({ ...data, problems }, now) : data;
+}
+
 export function updateSettings(
   data: LeetLoopData,
   updates: Parameters<typeof updateSettingsInData>[1],
@@ -206,7 +267,11 @@ export function logAttempt(
   const attemptedAt = new Date(attempt.attemptedAt);
   const plannedForDate = getAttemptPlannedForDate(problem, attemptedAt);
   const countedAttempt: Attempt = plannedForDate ? { ...attempt, plannedForDate } : attempt;
-  const scheduledProblem = scheduleNextReview(problem, input.result, attemptedAt);
+  const scheduledProblem = {
+    ...scheduleNextReview(problem, input.result, attemptedAt),
+    snoozedAt: undefined,
+    snoozedUntil: undefined,
+  };
   const problems = data.problems.map((item) => (item.id === problemId ? scheduledProblem : item));
   const nextData = touchData(
     {
@@ -262,6 +327,16 @@ function normalizeProblem(value: unknown): Problem | undefined {
             ? candidate.nextReviewAt
             : undefined,
     nextReviewAt: typeof candidate.nextReviewAt === "string" ? candidate.nextReviewAt : undefined,
+    snoozedAt: typeof candidate.snoozedAt === "string" ? candidate.snoozedAt : undefined,
+    snoozedUntil:
+      typeof candidate.snoozedAt === "string" && typeof candidate.snoozedUntil === "string"
+        ? candidate.snoozedUntil
+        : undefined,
+    planSlotConsumedOn:
+      typeof candidate.planSlotConsumedOn === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(candidate.planSlotConsumedOn)
+        ? candidate.planSlotConsumedOn
+        : undefined,
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString(),
     reviewCount: candidate.reviewCount ?? 0,

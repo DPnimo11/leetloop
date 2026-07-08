@@ -23,11 +23,13 @@ import {
   exportData as exportDataFromStorage,
   importData as importDataFromStorage,
   logAttempt as logAttemptToData,
+  resumeProblem as resumeProblemInData,
+  snoozeProblem as snoozeProblemInData,
   updateProblem as updateProblemInData,
   updateSettings as updateSettingsInData,
 } from "@/lib/storage";
 import { isTemplateAdded } from "@/lib/problemSets";
-import { planDailyWork, refillTodayPlan } from "@/lib/planning";
+import { getUpcomingPlan, planDailyWork, refillTodayPlan } from "@/lib/planning";
 import { createClient } from "@/lib/supabase/client";
 import { loadCloudData, syncCloudData } from "@/lib/cloud/repository";
 
@@ -48,6 +50,8 @@ type LeetLoopContextValue = {
   updateSettings: (updates: Partial<LeetLoopSettings>) => void;
   deleteProblem: (problemId: string) => void;
   logAttempt: (problemId: string, input: AttemptInput) => Attempt;
+  snoozeProblem: (problemId: string, until?: Date) => void;
+  resumeProblem: (problemId: string) => void;
   repopulateToday: () => number;
   exportJson: () => string;
   importJson: (raw: string) => Promise<LeetLoopData>;
@@ -168,6 +172,41 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
     };
   }, [supabase, enqueueSync]);
 
+  useEffect(() => {
+    const now = Date.now();
+    const nextWakeAt = data.problems.reduce<number | undefined>((nearest, problem) => {
+      if (!problem.snoozedAt || !problem.snoozedUntil) {
+        return nearest;
+      }
+
+      const wakeAt = new Date(problem.snoozedUntil).getTime();
+      if (!Number.isFinite(wakeAt) || wakeAt <= now) {
+        return nearest;
+      }
+
+      return nearest === undefined ? wakeAt : Math.min(nearest, wakeAt);
+    }, undefined);
+
+    if (nextWakeAt === undefined) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      const prev = dataRef.current;
+      const planned = planDailyWork(prev, { now: new Date() });
+
+      if (planned === prev) {
+        return;
+      }
+
+      dataRef.current = planned;
+      setData(planned);
+      enqueueSync(prev, planned);
+    }, Math.max(0, nextWakeAt - now + 50));
+
+    return () => window.clearTimeout(timeout);
+  }, [data.problems, enqueueSync]);
+
   const commit = useCallback(
     <T,>(updater: (current: LeetLoopData) => { data: LeetLoopData; result: T }) => {
       const prev = dataRef.current;
@@ -238,6 +277,35 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
     });
   }, [commit]);
 
+  const snoozeProblem = useCallback((problemId: string, until?: Date) => {
+    commit<void>((current) => {
+      const now = new Date();
+      const todayPlan = getUpcomingPlan(current, { now, days: 1 })[0];
+      const consumesPlanSlot = Boolean(
+        todayPlan &&
+          [...todayPlan.reviews, ...todayPlan.newStarts].some(
+            (problem) => problem.id === problemId,
+          ),
+      );
+
+      return {
+        data: snoozeProblemInData(current, problemId, {
+          now,
+          until,
+          consumePlanSlot: consumesPlanSlot,
+        }),
+        result: undefined,
+      };
+    });
+  }, [commit]);
+
+  const resumeProblem = useCallback((problemId: string) => {
+    commit<void>((current) => ({
+      data: resumeProblemInData(current, problemId),
+      result: undefined,
+    }));
+  }, [commit]);
+
   const repopulateToday = useCallback(() => {
     return commit<number>((current) => {
       const next = refillTodayPlan(current);
@@ -288,6 +356,8 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       updateSettings,
       deleteProblem,
       logAttempt,
+      snoozeProblem,
+      resumeProblem,
       repopulateToday,
       exportJson,
       importJson,
@@ -305,10 +375,12 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       isTemplateInQueue,
       loadError,
       logAttempt,
+      resumeProblem,
       repopulateToday,
       ready,
       syncError,
       syncing,
+      snoozeProblem,
       updateProblem,
       updateSettings,
     ],
