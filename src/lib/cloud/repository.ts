@@ -24,6 +24,7 @@ type ProblemRow = {
   status: string;
   notes: string | null;
   last_attempted_at: string | null;
+  ideal_review_at: string | null;
   next_review_at: string | null;
   review_count: number | null;
   clean_streak: number | null;
@@ -66,6 +67,7 @@ function problemToRow(problem: Problem, userId: string): ProblemRow {
     status: problem.status,
     notes: problem.notes ?? null,
     last_attempted_at: problem.lastAttemptedAt ?? null,
+    ideal_review_at: problem.idealReviewAt ?? null,
     next_review_at: problem.nextReviewAt ?? null,
     review_count: problem.reviewCount,
     clean_streak: problem.cleanStreak,
@@ -94,6 +96,8 @@ function rowToProblem(row: ProblemRow): Problem | undefined {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastAttemptedAt: row.last_attempted_at ?? undefined,
+    idealReviewAt:
+      row.ideal_review_at ?? (row.status === "new" ? undefined : row.next_review_at ?? undefined),
     nextReviewAt: row.next_review_at ?? undefined,
     reviewCount: row.review_count ?? 0,
     cleanStreak: row.clean_streak ?? 0,

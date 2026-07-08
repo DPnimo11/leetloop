@@ -51,12 +51,14 @@ export function scheduleNextReview(
     result === "solved_clean"
       ? getCleanReviewIntervalDays(cleanStreak)
       : BASE_REVIEW_INTERVAL_DAYS[result];
+  const idealReviewAt = addDays(attemptedAt, intervalDays).toISOString();
 
   return {
     ...problem,
     status: getStatusAfterAttempt(result),
     lastAttemptedAt: attemptedAtIso,
-    nextReviewAt: addDays(attemptedAt, intervalDays).toISOString(),
+    idealReviewAt,
+    nextReviewAt: idealReviewAt,
     reviewCount: problem.reviewCount + 1,
     cleanStreak,
     lastResult: result,

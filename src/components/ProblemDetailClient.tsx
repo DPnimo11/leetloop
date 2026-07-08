@@ -38,6 +38,9 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
   const currentProblem = problem;
   const noteValue = notesDraft?.problemId === currentProblem.id ? notesDraft.value : (currentProblem.notes ?? "");
   const sourceSets = currentProblem.sourceSetSlugs?.map(getProblemSetName) ?? [];
+  const planDiffersFromIdeal =
+    currentProblem.idealReviewAt &&
+    formatDate(currentProblem.idealReviewAt) !== formatDate(currentProblem.nextReviewAt);
 
   function saveNotes() {
     updateProblem(currentProblem.id, { notes: noteValue });
@@ -98,8 +101,13 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
 
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-md bg-[var(--surface-subtle)] p-3">
-            <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--muted)]">Next review</dt>
+            <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--muted)]">Planned review</dt>
             <dd className="mt-1 text-sm font-semibold">{formatDate(currentProblem.nextReviewAt)}</dd>
+            {planDiffersFromIdeal ? (
+              <dd className="mt-1 text-xs text-[var(--muted)]">
+                Ideal {formatDate(currentProblem.idealReviewAt)}
+              </dd>
+            ) : null}
           </div>
           <div className="rounded-md bg-[var(--surface-subtle)] p-3">
             <dt className="text-xs font-semibold uppercase tracking-normal text-[var(--muted)]">Last result</dt>

@@ -25,7 +25,7 @@ export function ProblemCard({ problem }: { problem: Problem }) {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={problem.difficulty} />
             <StatusBadge status={problem.status} />
-            <span className="text-sm text-[var(--muted)]">Next: {formatDate(problem.nextReviewAt)}</span>
+            <span className="text-sm text-[var(--muted)]">Planned: {formatDate(problem.nextReviewAt)}</span>
           </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {problem.patterns.slice(0, 5).map((tag) => (

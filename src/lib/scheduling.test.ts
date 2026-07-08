@@ -33,6 +33,7 @@ describe("scheduleNextReview", () => {
     expectedDate.setDate(expectedDate.getDate() + days);
 
     expect(scheduled.nextReviewAt).toBe(expectedDate.toISOString());
+    expect(scheduled.idealReviewAt).toBe(expectedDate.toISOString());
     expect(scheduled.status).toBe(status);
     expect(scheduled.cleanStreak).toBe(0);
     expect(scheduled.reviewCount).toBe(1);
@@ -56,6 +57,7 @@ describe("scheduleNextReview", () => {
       expect(scheduled.status).toBe("reviewing");
       expect(scheduled.cleanStreak).toBe(expectedStreak);
       expect(scheduled.nextReviewAt).toBe(expectedDate);
+      expect(scheduled.idealReviewAt).toBe(expectedDate);
       expect(scheduled.lastAttemptedAt).toBe(attemptedAt.toISOString());
     },
   );

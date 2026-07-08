@@ -12,6 +12,10 @@ import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
 
 function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new" }) {
+  const idealDate = problem.idealReviewAt;
+  const planDiffersFromIdeal =
+    idealDate && formatDate(idealDate) !== formatDate(problem.nextReviewAt);
+
   return (
     <div className="rounded-md border border-[var(--border)] bg-white p-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -34,9 +38,9 @@ function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new
               <TagPill key={tag} tag={tag} />
             ))}
           </div>
-          {kind === "review" ? (
+          {kind === "review" && planDiffersFromIdeal ? (
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Ideally due {formatDate(problem.nextReviewAt)}
+              Ideal review {formatDate(idealDate)}
             </p>
           ) : null}
         </div>
@@ -76,8 +80,8 @@ export function UpcomingClient() {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               Daily target: {dailyTarget}.{" "}
               {reservedNewStarts
-                ? `Up to ${reservedNewStarts} slot${reservedNewStarts === 1 ? "" : "s"} reserved for new starts; excess reviews roll forward.`
-                : "Reviews take priority; new starts fill open space."}
+                ? `Up to ${reservedNewStarts} slot${reservedNewStarts === 1 ? "" : "s"} reserved for new starts; review collisions are balanced across available days.`
+                : "Reviews take priority; collisions are balanced across available days and new starts fill open space."}
             </p>
           </div>
           <div className="rounded-md bg-[var(--surface-subtle)] px-3 py-2 text-sm font-semibold text-[var(--muted)]">
@@ -117,11 +121,6 @@ export function UpcomingClient() {
                   <span className="rounded-full border border-[var(--border)] bg-white px-2 py-1">
                     {openSlots} open
                   </span>
-                  {day.waitingReviews.length ? (
-                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-amber-700">
-                      {day.waitingReviews.length} waiting
-                    </span>
-                  ) : null}
                 </div>
               </div>
 
@@ -137,12 +136,6 @@ export function UpcomingClient() {
               ) : (
                 <p className="mt-3 text-sm text-[var(--muted)]">Nothing planned.</p>
               )}
-              {day.waitingReviews.length ? (
-                <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  {day.waitingReviews.length} due review
-                  {day.waitingReviews.length === 1 ? "" : "s"} remain outside this day&apos;s capacity and roll forward.
-                </p>
-              ) : null}
             </section>
           );
         })}

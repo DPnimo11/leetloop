@@ -68,6 +68,7 @@ describe("storage helpers", () => {
     expect(result.data.attempts).toHaveLength(1);
     expect(result.attempt.timeMinutes).toBe(22);
     expect(result.problem.status).toBe("learning");
+    expect(result.problem.idealReviewAt).toBe("2026-05-20T12:00:00.000Z");
     expect(result.problem.nextReviewAt).toBe("2026-05-20T12:00:00.000Z");
     expect(result.problem.reviewCount).toBe(1);
   });
@@ -149,6 +150,34 @@ describe("storage helpers", () => {
       reservedNewStartsPerDay: 1,
       extraDailyCapacity: {},
     });
+  });
+
+  it("preserves a legacy review date as the ideal date when importing an older backup", () => {
+    const parsed = parseLeetLoopData(
+      JSON.stringify({
+        version: 1,
+        problems: [
+          {
+            id: "problem_1",
+            title: "Two Sum",
+            url: template.url,
+            platform: "LeetCode",
+            difficulty: "Easy",
+            patterns: ["Arrays"],
+            status: "reviewing",
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            nextReviewAt: "2026-05-20T12:00:00.000Z",
+            reviewCount: 1,
+            cleanStreak: 1,
+          },
+        ],
+        attempts: [],
+        updatedAt: now.toISOString(),
+      }),
+    );
+
+    expect(parsed.problems[0]?.idealReviewAt).toBe("2026-05-20T12:00:00.000Z");
   });
 
   it("normalizes saved settings", () => {

@@ -253,6 +253,15 @@ function normalizeProblem(value: unknown): Problem | undefined {
       ? candidate.patterns.filter((pattern): pattern is string => typeof pattern === "string" && pattern.length > 0)
       : [],
     status: candidate.status,
+    idealReviewAt:
+      typeof candidate.idealReviewAt === "string"
+        ? candidate.idealReviewAt
+        : candidate.status === "new"
+          ? undefined
+          : typeof candidate.nextReviewAt === "string"
+            ? candidate.nextReviewAt
+            : undefined,
+    nextReviewAt: typeof candidate.nextReviewAt === "string" ? candidate.nextReviewAt : undefined,
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString(),
     reviewCount: candidate.reviewCount ?? 0,

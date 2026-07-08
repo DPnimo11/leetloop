@@ -152,7 +152,6 @@ export function TodayClient() {
   const reservedNewStarts = getReservedNewStarts(data.settings);
   const todayPlanDay = getUpcomingPlan(data, { now: today, days: 1 })[0];
   const plannedReviews = todayPlanDay?.reviews ?? [];
-  const waitingReviews = todayPlanDay?.waitingReviews ?? [];
   const plannedNewToday = todayPlanDay?.newStarts ?? [];
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const futurePlannedNewCount = activeProblems.filter(
@@ -182,8 +181,7 @@ export function TodayClient() {
   const completedToday = getCompletedDailyAttempts(data.attempts, today);
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
-  const canRefillToday =
-    readyCount === 0 && waitingReviews.length === 0 && refillCandidateCount > 0;
+  const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
   const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
   const heroText = readyCount
     ? `${readyCount} of ${dailyPlanTotal} left today`
@@ -196,19 +194,15 @@ export function TodayClient() {
     }
 
     if (completedTodayCount) {
-      return waitingReviews.length
-        ? `Today's plan is clear. ${waitingReviews.length} waiting review${waitingReviews.length === 1 ? "" : "s"} will roll forward.`
-        : "Nice. Today's planned queue is clear, and completed items stay visible below.";
+      return "Nice. Today's planned queue is clear, and completed items stay visible below.";
     }
 
     if (plannedReviews.length) {
-      return waitingReviews.length
-        ? "Start with the oldest planned review. Extra due work is waiting below."
-        : "Start with the oldest review, then clear today's queue.";
+      return "Start with the oldest review, then clear today's queue.";
     }
 
     if (plannedNewToday.length) {
-      return "No reviews are waiting. Start today's planned new problem.";
+      return "Start today's planned new problem.";
     }
 
     return "Nice. Add a new problem or pull one from a built-in list.";
@@ -307,22 +301,6 @@ export function TodayClient() {
         )}
       </section>
 
-      {waitingReviews.length ? (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-xl font-semibold tracking-normal">
-              Waiting Reviews ({waitingReviews.length})
-            </h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              These reviews are due, but outside today&apos;s capacity. The oldest roll into the next available plan.
-            </p>
-          </div>
-          {waitingReviews.map((problem) => (
-            <ProblemCard key={problem.id} problem={problem} />
-          ))}
-        </section>
-      ) : null}
-
       {completedToday.length ? (
         <section className="space-y-3">
           <h2 className="text-xl font-semibold tracking-normal">Done Today</h2>
@@ -341,8 +319,8 @@ export function TodayClient() {
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--muted)]">
               {reservedNewStarts
-                ? `Planning reserves up to ${reservedNewStarts} new-start slot${reservedNewStarts === 1 ? "" : "s"} when available. Waiting reviews roll forward.`
-                : `Reviews fill the ${dailyCapacity}-item plan before new starts. Waiting reviews roll forward.`}
+                ? `Planning reserves up to ${reservedNewStarts} new-start slot${reservedNewStarts === 1 ? "" : "s"} when available. Review collisions are leveled across upcoming days.`
+                : `Reviews fill the ${dailyCapacity}-item plan before new starts. Review collisions are leveled across upcoming days.`}
             </p>
             <Link className="text-sm font-semibold text-[var(--accent-strong)] hover:underline" href="/upcoming">
               View upcoming

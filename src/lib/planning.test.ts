@@ -66,7 +66,7 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[1]?.newStarts).toHaveLength(2);
   });
 
-  it("reserves a new-start slot on a day full of reviews", () => {
+  it("balances a review collision while reserving a new-start slot", () => {
     const reviews = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) =>
       problem({
         id: `review_${index}`,
@@ -86,10 +86,11 @@ describe("planNewProblemStarts", () => {
     );
     const upcoming = getUpcomingPlan(planned, { now });
 
-    expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 1);
+    expect(upcoming[0]?.reviews).toHaveLength(2);
     expect(upcoming[0]?.newStarts.map((item) => item.id)).toEqual(["new_1"]);
-    expect(upcoming[0]?.waitingReviews).toHaveLength(1);
-    expect(upcoming[1]?.reviews).toHaveLength(1);
+    expect(upcoming[1]?.reviews).toHaveLength(3);
+    expect(upcoming[0]?.load).toBe(3);
+    expect(upcoming[1]?.load).toBe(3);
   });
 
   it("moves extra existing new starts when a review backlog fills the day", () => {
@@ -114,10 +115,11 @@ describe("planNewProblemStarts", () => {
 
     expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 1);
     expect(upcoming[0]?.newStarts).toHaveLength(1);
-    expect(upcoming[0]?.waitingReviews).toHaveLength(9);
+    expect(upcoming.slice(0, 4).reduce((total, day) => total + day.reviews.length, 0)).toBe(13);
+    expect(upcoming.every((day) => day.load <= day.capacity)).toBe(true);
   });
 
-  it("lets reviews fill the target when no new problems exist", () => {
+  it("splits an overloaded review day evenly across the minimum number of days", () => {
     const planned = planNewProblemStarts(
       data(
         Array.from({ length: DAILY_PLAN_CAPACITY + 1 }, (_, index) =>
@@ -132,11 +134,10 @@ describe("planNewProblemStarts", () => {
     );
     const upcoming = getUpcomingPlan(planned, { now });
 
-    expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY);
+    expect(upcoming[0]?.reviews).toHaveLength(3);
     expect(upcoming[0]?.newStarts).toHaveLength(0);
-    expect(upcoming[0]?.waitingReviews).toHaveLength(1);
-    expect(upcoming[1]?.reviews).toHaveLength(1);
-    expect(upcoming[1]?.waitingReviews).toHaveLength(0);
+    expect(upcoming[1]?.reviews).toHaveLength(3);
+    expect("waitingReviews" in upcoming[0]!).toBe(false);
   });
 
   it("supports reviews-first planning when the reserve is zero", () => {
@@ -192,11 +193,8 @@ describe("planNewProblemStarts", () => {
 
     expect(upcoming[0]?.reviews).toHaveLength(0);
     expect(upcoming[0]?.newStarts.map((item) => item.id)).toEqual(["new_1"]);
-    expect(upcoming[0]?.waitingReviews).toHaveLength(2);
     expect(upcoming[1]?.reviews).toHaveLength(1);
-    expect(upcoming[1]?.waitingReviews).toHaveLength(1);
     expect(upcoming[2]?.reviews).toHaveLength(1);
-    expect(upcoming[2]?.waitingReviews).toHaveLength(0);
   });
 
   it("reserves multiple new-start slots when configured", () => {
@@ -223,12 +221,12 @@ describe("planNewProblemStarts", () => {
     );
     const upcoming = getUpcomingPlan(planned, { now });
 
-    expect(upcoming[0]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 2);
+    expect(upcoming[0]?.reviews).toHaveLength(2);
     expect(upcoming[0]?.newStarts).toHaveLength(2);
-    expect(upcoming[0]?.waitingReviews).toHaveLength(2);
+    expect(upcoming[1]?.reviews).toHaveLength(3);
   });
 
-  it("rolls a future review collision forward without changing ideal due dates", () => {
+  it("levels a future review collision without changing ideal due dates", () => {
     const idealReviewDate = "2026-05-20T12:00:00.000Z";
     const reviews = Array.from({ length: DAILY_PLAN_CAPACITY + 1 }, (_, index) =>
       problem({
@@ -250,16 +248,82 @@ describe("planNewProblemStarts", () => {
     );
     const upcoming = getUpcomingPlan(planned, { now, days: 3 });
 
-    expect(upcoming[1]?.reviews).toHaveLength(DAILY_PLAN_CAPACITY - 1);
+    expect(upcoming[1]?.reviews).toHaveLength(3);
     expect(upcoming[1]?.newStarts.map((item) => item.id)).toEqual(["new_tomorrow"]);
-    expect(upcoming[1]?.waitingReviews).toHaveLength(2);
-    expect(upcoming[2]?.reviews).toHaveLength(2);
-    expect(upcoming[2]?.waitingReviews).toHaveLength(0);
+    expect(upcoming[2]?.reviews).toHaveLength(3);
     expect(
       planned.problems
         .filter((item) => item.id.startsWith("review_"))
-        .every((item) => item.nextReviewAt === idealReviewDate),
+        .every((item) => item.idealReviewAt === idealReviewDate),
     ).toBe(true);
+    expect(
+      planned.problems
+        .filter((item) => item.id.startsWith("review_"))
+        .some((item) => item.nextReviewAt !== idealReviewDate),
+    ).toBe(true);
+  });
+
+  it("assigns review overflow beyond the 14-day preview instead of leaving it waiting", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data(
+          Array.from({ length: 16 }, (_, index) =>
+            problem({
+              id: `review_${index}`,
+              status: "reviewing",
+              nextReviewAt: "2026-05-19T00:00:00.000Z",
+            }),
+          ),
+        ),
+        settings: {
+          dailyTarget: 1,
+          reservedNewStartsPerDay: 0,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const preview = getUpcomingPlan(planned, { now });
+    const plannedDateKeys = planned.problems.map((item) => item.nextReviewAt?.slice(0, 10));
+
+    expect(preview.reduce((total, day) => total + day.reviews.length, 0)).toBe(14);
+    expect(plannedDateKeys).toContain("2026-06-03");
+    expect(planned.problems.every((item) => Boolean(item.nextReviewAt))).toBe(true);
+  });
+
+  it("does not let a newer ideal date leapfrog older leveled work", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data([
+          problem({
+            id: "older_1",
+            status: "reviewing",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+          problem({
+            id: "older_2",
+            status: "reviewing",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+          problem({
+            id: "newer",
+            status: "reviewing",
+            nextReviewAt: "2026-05-20T00:00:00.000Z",
+          }),
+        ]),
+        settings: {
+          dailyTarget: 1,
+          reservedNewStartsPerDay: 0,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const upcoming = getUpcomingPlan(planned, { now, days: 3 });
+
+    expect(upcoming[0]?.reviews[0]?.id).toBe("older_1");
+    expect(upcoming[1]?.reviews[0]?.id).toBe("older_2");
+    expect(upcoming[2]?.reviews[0]?.id).toBe("newer");
   });
 
   it("clears new problems that do not fit inside the planning window", () => {
@@ -365,6 +429,7 @@ describe("planNewProblemStarts", () => {
             ? {
                 ...item,
                 lastAttemptedAt: now.toISOString(),
+                idealReviewAt: "2026-06-02T12:00:00.000Z",
                 nextReviewAt: "2026-06-02T12:00:00.000Z",
                 reviewCount: 1,
                 cleanStreak: 1,

@@ -20,6 +20,7 @@ export type Problem = {
   createdAt: string;
   updatedAt: string;
   lastAttemptedAt?: string;
+  idealReviewAt?: string;
   nextReviewAt?: string;
   reviewCount: number;
   cleanStreak: number;

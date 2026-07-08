@@ -27,7 +27,7 @@ import {
   updateSettings as updateSettingsInData,
 } from "@/lib/storage";
 import { isTemplateAdded } from "@/lib/problemSets";
-import { planNewProblemStarts, refillTodayPlan } from "@/lib/planning";
+import { planDailyWork, refillTodayPlan } from "@/lib/planning";
 import { createClient } from "@/lib/supabase/client";
 import { loadCloudData, syncCloudData } from "@/lib/cloud/repository";
 
@@ -141,7 +141,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const planned = touchUpdatedAt(planNewProblemStarts(loaded));
+        const planned = touchUpdatedAt(planDailyWork(loaded));
         dataRef.current = planned;
         setData(planned);
         // Persist any planning side effects that ran on load.
@@ -177,7 +177,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
         return next.result;
       }
 
-      const planned = touchUpdatedAt(planNewProblemStarts(next.data));
+      const planned = touchUpdatedAt(planDailyWork(next.data));
       dataRef.current = planned;
       setData(planned);
       enqueueSync(prev, planned);
@@ -254,7 +254,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
   const importJson = useCallback(async (raw: string) => {
     const imported = importDataFromStorage(raw);
     const prev = dataRef.current;
-    const planned = touchUpdatedAt(planNewProblemStarts(imported));
+    const planned = touchUpdatedAt(planDailyWork(imported));
     dataRef.current = planned;
     setData(planned);
     // Await the cloud write so the caller only reports success once it lands.
