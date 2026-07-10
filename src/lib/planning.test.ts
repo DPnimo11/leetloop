@@ -4,7 +4,7 @@ import type { Problem } from "@/types/problem";
 import type { LeetLoopData } from "@/types/storage";
 import { createDefaultSettings } from "./settings";
 import { DAILY_PLAN_CAPACITY, getUpcomingPlan, planNewProblemStarts, refillTodayPlan } from "./planning";
-import { snoozeProblem } from "./storage";
+import { logAttempt, snoozeProblem } from "./storage";
 
 const now = new Date("2026-05-19T12:00:00.000Z");
 
@@ -547,6 +547,60 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[0]?.completedCount).toBe(1);
     expect(upcoming[0]?.load).toBe(DAILY_PLAN_CAPACITY);
     expect(upcoming[1]?.newStarts).toHaveLength(2);
+  });
+
+  it("keeps the remaining leveled review assignments stable after any one is logged", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data(
+          Array.from({ length: DAILY_PLAN_CAPACITY + 1 }, (_, index) =>
+            problem({
+              id: `review_${index}`,
+              title: `Review ${index}`,
+              status: "reviewing",
+              idealReviewAt: "2026-05-19T00:00:00.000Z",
+              nextReviewAt: "2026-05-19T00:00:00.000Z",
+            }),
+          ),
+        ),
+        settings: {
+          dailyTarget: DAILY_PLAN_CAPACITY,
+          reservedNewStartsPerDay: 0,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const todayBefore = getUpcomingPlan(planned, { now, days: 1 })[0]?.reviews ?? [];
+
+    expect(todayBefore).toHaveLength(3);
+
+    for (const loggedProblem of todayBefore) {
+      const assignmentsBefore = new Map(
+        planned.problems
+          .filter((item) => item.id !== loggedProblem.id)
+          .map((item) => [item.id, item.nextReviewAt]),
+      );
+      const logged = logAttempt(
+        planned,
+        loggedProblem.id,
+        { result: "solved_clean" },
+        { now, idFactory: () => "attempt_1" },
+      );
+      const replanned = planNewProblemStarts(logged.data, { now });
+      const todayAfter = getUpcomingPlan(replanned, { now, days: 1 })[0]?.reviews ?? [];
+
+      expect(todayAfter.map((item) => item.id)).toEqual(
+        todayBefore.filter((item) => item.id !== loggedProblem.id).map((item) => item.id),
+      );
+      expect(
+        new Map(
+          replanned.problems
+            .filter((item) => item.id !== loggedProblem.id)
+            .map((item) => [item.id, item.nextReviewAt]),
+        ),
+      ).toEqual(assignmentsBefore);
+    }
   });
 
   it("keeps existing future new-start assignments stable", () => {

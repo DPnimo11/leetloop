@@ -182,19 +182,6 @@ function remainingReviewCapacity(day: MutablePlanDay): number {
   );
 }
 
-function dayUtilization(day: MutablePlanDay): number {
-  if (day.capacity <= 0) {
-    return 1;
-  }
-
-  return (
-    day.completedCount +
-    day.deferredCount +
-    day.newSlots +
-    day.reviews.length
-  ) / day.capacity;
-}
-
 /**
  * Assigns every review a concrete plan date without changing its ideal memory
  * date. Collisions use the minimum number of days required, then balance work
@@ -289,26 +276,89 @@ export function planDailyWork(
       }
 
       const lastIndex = endIndex - 1;
-      for (const problem of group) {
+      const targetCounts = new Map<number, number>();
+
+      // Work out the same balanced day loads without assigning identities yet.
+      // That lets an already-leveled review keep its concrete plan date when the
+      // day still needs the same number of reviews.
+      for (let assignedCount = 0; assignedCount < group.length; assignedCount += 1) {
         let selectedIndex = -1;
         let selectedUtilization = Number.POSITIVE_INFINITY;
 
         for (let index = startIndex; index <= lastIndex; index += 1) {
           const day = ensureDay(index);
-          if (remainingReviewCapacity(day) <= 0) {
+          const targetedReviews = targetCounts.get(index) ?? 0;
+          if (remainingReviewCapacity(day) - targetedReviews <= 0) {
             continue;
           }
 
-          const utilization = dayUtilization(day);
+          const utilization = day.capacity <= 0
+            ? 1
+            : (
+                day.completedCount +
+                day.deferredCount +
+                day.newSlots +
+                day.reviews.length +
+                targetedReviews
+              ) / day.capacity;
           if (utilization < selectedUtilization) {
             selectedIndex = index;
             selectedUtilization = utilization;
           }
         }
 
-        const selectedDay = ensureDay(selectedIndex);
+        targetCounts.set(selectedIndex, (targetCounts.get(selectedIndex) ?? 0) + 1);
+      }
+
+      const remainingTargets = new Map(targetCounts);
+      const floatingProblems: Problem[] = [];
+
+      function assignReview(problem: Problem, index: number): void {
+        const selectedDay = ensureDay(index);
         selectedDay.reviews.push(problem);
-        assignments.set(problem.id, selectedDay.date.toISOString());
+        assignments.set(
+          problem.id,
+          getPlannedDateKey(problem) === selectedDay.dateKey
+            ? problem.nextReviewAt ?? selectedDay.date.toISOString()
+            : selectedDay.date.toISOString(),
+        );
+        remainingTargets.set(index, (remainingTargets.get(index) ?? 0) - 1);
+      }
+
+      for (const problem of group) {
+        const currentDateKey = getPlannedDateKey(problem);
+        const normalizedDateKey = currentDateKey && currentDateKey < todayKey
+          ? todayKey
+          : currentDateKey;
+        let currentIndex = -1;
+
+        if (normalizedDateKey) {
+          for (let index = startIndex; index <= lastIndex; index += 1) {
+            if (ensureDay(index).dateKey === normalizedDateKey) {
+              currentIndex = index;
+              break;
+            }
+          }
+        }
+
+        if (currentIndex >= 0 && (remainingTargets.get(currentIndex) ?? 0) > 0) {
+          assignReview(problem, currentIndex);
+        } else {
+          floatingProblems.push(problem);
+        }
+      }
+
+      for (const problem of floatingProblems) {
+        let selectedIndex = -1;
+
+        for (let index = startIndex; index <= lastIndex; index += 1) {
+          if ((remainingTargets.get(index) ?? 0) > 0) {
+            selectedIndex = index;
+            break;
+          }
+        }
+
+        assignReview(problem, selectedIndex);
       }
     }
 
