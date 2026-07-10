@@ -30,8 +30,16 @@ type MutablePlanDay = {
   capacity: number;
   completedCount: number;
   deferredCount: number;
+  committedSlots: number;
   newSlots: number;
   reviews: Problem[];
+};
+
+export type PlanDailyWorkOptions = {
+  now?: Date;
+  days?: number;
+  dailyCapacity?: number;
+  frozenTodayProblemIds?: ReadonlySet<string>;
 };
 
 function sortByCreatedDate(problems: Problem[]): Problem[] {
@@ -170,6 +178,7 @@ function createMutablePlanDay(
     capacity: resolveDailyCapacity(data, date, dailyCapacity),
     completedCount: completedIds.size,
     deferredCount: [...deferredIds].filter((problemId) => !completedIds.has(problemId)).length,
+    committedSlots: 0,
     newSlots: 0,
     reviews: [],
   };
@@ -178,7 +187,12 @@ function createMutablePlanDay(
 function remainingReviewCapacity(day: MutablePlanDay): number {
   return Math.max(
     0,
-    day.capacity - day.completedCount - day.deferredCount - day.newSlots - day.reviews.length,
+    day.capacity -
+      day.completedCount -
+      day.deferredCount -
+      day.committedSlots -
+      day.newSlots -
+      day.reviews.length,
   );
 }
 
@@ -190,22 +204,48 @@ function remainingReviewCapacity(day: MutablePlanDay): number {
  */
 export function planDailyWork(
   data: LeetLoopData,
-  options: {
-    now?: Date;
-    days?: number;
-    dailyCapacity?: number;
-  } = {},
+  options: PlanDailyWorkOptions = {},
 ): LeetLoopData {
   const now = options.now ?? new Date();
   const today = startOfLocalDay(now);
   const todayKey = toLocalDateKey(today);
   const newStartPlanningDays = options.days ?? UPCOMING_PLAN_DAYS;
+  const freezeToday = options.frozenTodayProblemIds !== undefined;
+  const requestedFrozenIds = options.frozenTodayProblemIds ?? new Set<string>();
+  const frozenProblems = data.problems.filter(
+    (problem) =>
+      requestedFrozenIds.has(problem.id) &&
+      isProblemAvailable(problem, now) &&
+      (isReviewProblem(problem) || isNewProblem(problem)),
+  );
+  const frozenProblemIds = new Set(frozenProblems.map((problem) => problem.id));
+  const frozenReviewAssignments = new Map<string, string>();
+  const frozenNewAssignments = new Map<string, string>();
+
+  for (const problem of frozenProblems) {
+    const assignment = getPlannedDateKey(problem) === todayKey
+      ? problem.nextReviewAt ?? today.toISOString()
+      : today.toISOString();
+
+    if (isReviewProblem(problem)) {
+      frozenReviewAssignments.set(problem.id, assignment);
+    } else {
+      frozenNewAssignments.set(problem.id, assignment);
+    }
+  }
+
   const newProblems = sortByCreatedDate(
-    data.problems.filter((problem) => isNewProblem(problem) && isProblemAvailable(problem, now)),
+    data.problems.filter(
+      (problem) =>
+        !frozenProblemIds.has(problem.id) &&
+        isNewProblem(problem) &&
+        isProblemAvailable(problem, now),
+    ),
   );
   const reviewProblems = sortByIdealReviewDate(
     data.problems.filter(
       (problem) =>
+        !frozenProblemIds.has(problem.id) &&
         isReviewProblem(problem) &&
         isProblemAvailable(problem, now) &&
         Boolean(getIdealReviewDateKey(problem)),
@@ -216,7 +256,18 @@ export function planDailyWork(
   function ensureDay(index: number): MutablePlanDay {
     while (planDays.length <= index) {
       const date = addDays(today, planDays.length);
-      planDays.push(createMutablePlanDay(data, date, options.dailyCapacity));
+      const day = createMutablePlanDay(data, date, options.dailyCapacity);
+
+      if (freezeToday && day.dateKey === todayKey) {
+        // A frozen Today queue owns every remaining slot, including intentional
+        // empty space, so future work cannot backfill it during this replan.
+        day.committedSlots = Math.max(
+          0,
+          day.capacity - day.completedCount - day.deferredCount,
+        );
+      }
+
+      planDays.push(day);
     }
 
     return planDays[index]!;
@@ -234,7 +285,10 @@ export function planDailyWork(
 
   for (let index = 0; index < newStartPlanningDays && unreservedNewCount > 0; index += 1) {
     const day = ensureDay(index);
-    const available = Math.max(0, day.capacity - day.completedCount - day.deferredCount);
+    const available = Math.max(
+      0,
+      day.capacity - day.completedCount - day.deferredCount - day.committedSlots,
+    );
     const reserved = Math.min(reservedNewStarts, unreservedNewCount, available);
     day.newSlots = reserved;
     unreservedNewCount -= reserved;
@@ -259,7 +313,7 @@ export function planDailyWork(
       day.reviews = [];
     }
 
-    const assignments = new Map<string, string>();
+    const assignments = new Map(frozenReviewAssignments);
 
     for (const [startDateKey, group] of [...reviewGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       let startIndex = 0;
@@ -297,6 +351,7 @@ export function planDailyWork(
             : (
                 day.completedCount +
                 day.deferredCount +
+                day.committedSlots +
                 day.newSlots +
                 day.reviews.length +
                 targetedReviews
@@ -374,7 +429,7 @@ export function planDailyWork(
     day.newSlots = 0;
   }
 
-  const newAssignments = new Map<string, string>();
+  const newAssignments = new Map(frozenNewAssignments);
   const floatingNewProblems: Problem[] = [];
 
   // Keep an existing new-start assignment when it still fits around the
@@ -388,7 +443,11 @@ export function planDailyWork(
 
     if (
       day &&
-      day.completedCount + day.deferredCount + day.reviews.length + day.newSlots < day.capacity
+      day.completedCount +
+        day.deferredCount +
+        day.committedSlots +
+        day.reviews.length +
+        day.newSlots < day.capacity
     ) {
       newAssignments.set(
         problem.id,
@@ -405,7 +464,11 @@ export function planDailyWork(
 
   for (const day of planDays.slice(0, newStartPlanningDays)) {
     while (
-      day.completedCount + day.deferredCount + day.reviews.length + day.newSlots < day.capacity &&
+      day.completedCount +
+        day.deferredCount +
+        day.committedSlots +
+        day.reviews.length +
+        day.newSlots < day.capacity &&
       floatingNewProblems.length > 0
     ) {
       const problem = floatingNewProblems.shift()!;

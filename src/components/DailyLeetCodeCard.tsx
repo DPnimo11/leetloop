@@ -128,16 +128,19 @@ export function DailyLeetCodeCard() {
       return;
     }
 
-    const createdProblem = addProblem({
-      title: dailyProblem.title,
-      url: dailyProblem.url,
-      platform: "LeetCode",
-      difficulty: dailyProblem.difficulty,
-      patterns: topicTags,
-      status: "new",
-      notes: `LeetCode daily challenge for ${dailyProblem.date}.`,
-      leetcodeSlug: dailyProblem.titleSlug,
-    });
+    const createdProblem = addProblem(
+      {
+        title: dailyProblem.title,
+        url: dailyProblem.url,
+        platform: "LeetCode",
+        difficulty: dailyProblem.difficulty,
+        patterns: topicTags,
+        status: "new",
+        notes: `LeetCode daily challenge for ${dailyProblem.date}.`,
+        leetcodeSlug: dailyProblem.titleSlug,
+      },
+      { preserveToday: true },
+    );
 
     setAddedProblem({
       id: createdProblem.id,

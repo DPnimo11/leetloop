@@ -29,7 +29,12 @@ import {
   updateSettings as updateSettingsInData,
 } from "@/lib/storage";
 import { isTemplateAdded } from "@/lib/problemSets";
-import { getUpcomingPlan, planDailyWork, refillTodayPlan } from "@/lib/planning";
+import {
+  getUpcomingPlan,
+  planDailyWork,
+  refillTodayPlan,
+  type PlanDailyWorkOptions,
+} from "@/lib/planning";
 import { createClient } from "@/lib/supabase/client";
 import { loadCloudData, syncCloudData } from "@/lib/cloud/repository";
 
@@ -38,13 +43,23 @@ type AddTemplateResult = {
   problem: Problem;
 };
 
+type AddProblemOptions = {
+  preserveToday?: boolean;
+};
+
+type CommitUpdate<T> = {
+  data: LeetLoopData;
+  result: T;
+  planningOptions?: PlanDailyWorkOptions;
+};
+
 type LeetLoopContextValue = {
   data: LeetLoopData;
   ready: boolean;
   loadError?: string;
   syncError?: string;
   syncing: boolean;
-  addProblem: (input: ProblemInput) => Problem;
+  addProblem: (input: ProblemInput, options?: AddProblemOptions) => Problem;
   addProblemFromTemplate: (template: ProblemTemplate) => AddTemplateResult;
   updateProblem: (problemId: string, updates: Partial<ProblemInput>) => void;
   updateSettings: (updates: Partial<LeetLoopSettings>) => void;
@@ -63,6 +78,16 @@ const LeetLoopContext = createContext<LeetLoopContextValue | undefined>(undefine
 
 function touchUpdatedAt(data: LeetLoopData): LeetLoopData {
   return { ...data, updatedAt: new Date().toISOString() };
+}
+
+function getTodayProblemIds(data: LeetLoopData, now: Date): Set<string> {
+  const todayPlan = getUpcomingPlan(data, { now, days: 1 })[0];
+
+  return new Set(
+    todayPlan
+      ? [...todayPlan.reviews, ...todayPlan.newStarts].map((problem) => problem.id)
+      : [],
+  );
 }
 
 export function LeetLoopProvider({ children }: { children: ReactNode }) {
@@ -208,7 +233,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
   }, [data.problems, enqueueSync]);
 
   const commit = useCallback(
-    <T,>(updater: (current: LeetLoopData) => { data: LeetLoopData; result: T }) => {
+    <T,>(updater: (current: LeetLoopData) => CommitUpdate<T>) => {
       const prev = dataRef.current;
       const next = updater(prev);
 
@@ -216,7 +241,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
         return next.result;
       }
 
-      const planned = touchUpdatedAt(planDailyWork(next.data));
+      const planned = touchUpdatedAt(planDailyWork(next.data, next.planningOptions));
       dataRef.current = planned;
       setData(planned);
       enqueueSync(prev, planned);
@@ -225,12 +250,17 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
     [enqueueSync],
   );
 
-  const addProblem = useCallback((input: ProblemInput) => {
+  const addProblem = useCallback((input: ProblemInput, options: AddProblemOptions = {}) => {
     return commit<Problem>((current) => {
-      const next = addProblemToData(current, input);
+      const now = new Date();
+      const frozenTodayProblemIds = options.preserveToday
+        ? getTodayProblemIds(current, now)
+        : undefined;
+      const next = addProblemToData(current, input, { now });
       return {
         data: next.data,
         result: next.problem,
+        planningOptions: { now, frozenTodayProblemIds },
       };
     });
   }, [commit]);
@@ -269,10 +299,14 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
   const logAttempt = useCallback((problemId: string, input: AttemptInput) => {
     return commit<Attempt>((current) => {
-      const next = logAttemptToData(current, problemId, input);
+      const now = new Date();
+      const frozenTodayProblemIds = getTodayProblemIds(current, now);
+      frozenTodayProblemIds.delete(problemId);
+      const next = logAttemptToData(current, problemId, input, { now });
       return {
         data: next.data,
         result: next.attempt,
+        planningOptions: { now, frozenTodayProblemIds },
       };
     });
   }, [commit]);

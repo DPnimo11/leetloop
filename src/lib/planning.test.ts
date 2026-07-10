@@ -4,7 +4,7 @@ import type { Problem } from "@/types/problem";
 import type { LeetLoopData } from "@/types/storage";
 import { createDefaultSettings } from "./settings";
 import { DAILY_PLAN_CAPACITY, getUpcomingPlan, planNewProblemStarts, refillTodayPlan } from "./planning";
-import { logAttempt, snoozeProblem } from "./storage";
+import { addProblem, logAttempt, snoozeProblem } from "./storage";
 
 const now = new Date("2026-05-19T12:00:00.000Z");
 
@@ -601,6 +601,169 @@ describe("planNewProblemStarts", () => {
         ),
       ).toEqual(assignmentsBefore);
     }
+  });
+
+  it("keeps the exact remaining Today queue after a planned new start is logged", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data([
+          problem({
+            id: "review_1",
+            status: "reviewing",
+            idealReviewAt: "2026-05-19T00:00:00.000Z",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+          ...Array.from({ length: 3 }, (_, index) =>
+            problem({
+              id: `new_${index}`,
+              title: `New ${index}`,
+              createdAt: `2026-05-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+            }),
+          ),
+        ]),
+        settings: {
+          dailyTarget: 2,
+          reservedNewStartsPerDay: 1,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const todayBefore = getUpcomingPlan(planned, { now, days: 1 })[0];
+    const loggedProblem = todayBefore?.newStarts[0];
+
+    expect([
+      ...(todayBefore?.reviews ?? []),
+      ...(todayBefore?.newStarts ?? []),
+    ].map((item) => item.id)).toEqual(["review_1", "new_0"]);
+    expect(loggedProblem).toBeDefined();
+
+    const logged = logAttempt(
+      planned,
+      loggedProblem?.id ?? "new_0",
+      { result: "solved_clean" },
+      { now, idFactory: () => "attempt_1" },
+    );
+    const replanned = planNewProblemStarts(logged.data, {
+      now,
+      frozenTodayProblemIds: new Set(["review_1"]),
+    });
+    const todayAfter = getUpcomingPlan(replanned, { now, days: 1 })[0];
+
+    expect(todayAfter?.reviews.map((item) => item.id)).toEqual(["review_1"]);
+    expect(todayAfter?.newStarts).toHaveLength(0);
+    expect(todayAfter?.completedCount).toBe(1);
+    expect(todayAfter?.load).toBe(2);
+  });
+
+  it("does not change Today when an off-plan review is logged", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data(
+          Array.from({ length: 4 }, (_, index) =>
+            problem({
+              id: `review_${index}`,
+              title: `Review ${index}`,
+              status: "reviewing",
+              idealReviewAt: "2026-05-19T00:00:00.000Z",
+              nextReviewAt: "2026-05-19T00:00:00.000Z",
+            }),
+          ),
+        ),
+        settings: {
+          dailyTarget: 3,
+          reservedNewStartsPerDay: 0,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const upcomingBefore = getUpcomingPlan(planned, { now, days: 2 });
+    const todayIds = upcomingBefore[0]?.reviews.map((item) => item.id) ?? [];
+    const offPlanProblem = upcomingBefore[1]?.reviews[0];
+
+    expect(todayIds).toHaveLength(2);
+    expect(offPlanProblem).toBeDefined();
+
+    const logged = logAttempt(
+      planned,
+      offPlanProblem?.id ?? "review_1",
+      { result: "solved_clean" },
+      { now, idFactory: () => "attempt_1" },
+    );
+    const replanned = planNewProblemStarts(logged.data, {
+      now,
+      frozenTodayProblemIds: new Set(todayIds),
+    });
+    const todayAfter = getUpcomingPlan(replanned, { now, days: 1 })[0];
+
+    expect(logged.attempt.plannedForDate).toBeUndefined();
+    expect(todayAfter?.reviews.map((item) => item.id)).toEqual(todayIds);
+    expect(todayAfter?.load).toBe(2);
+  });
+
+  it("keeps Today stable while an unsaved Daily is added and logged off plan", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data([
+          problem({
+            id: "review_1",
+            status: "reviewing",
+            idealReviewAt: "2026-05-19T00:00:00.000Z",
+            nextReviewAt: "2026-05-19T00:00:00.000Z",
+          }),
+          problem({ id: "new_1", title: "New 1" }),
+        ]),
+        settings: {
+          dailyTarget: 2,
+          reservedNewStartsPerDay: 1,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const todayIds = ["review_1", "new_1"];
+    const frozenTodayProblemIds = new Set(todayIds);
+    const added = addProblem(
+      planned,
+      {
+        title: "Daily Challenge",
+        url: "https://leetcode.com/problems/daily-challenge/",
+        platform: "LeetCode",
+        difficulty: "Easy",
+        status: "new",
+        leetcodeSlug: "daily-challenge",
+      },
+      { now, idFactory: () => "daily_problem" },
+    );
+    const plannedAfterAdd = planNewProblemStarts(added.data, {
+      now,
+      frozenTodayProblemIds,
+    });
+    const afterAddToday = getUpcomingPlan(plannedAfterAdd, { now, days: 1 })[0];
+
+    expect([
+      ...(afterAddToday?.reviews ?? []),
+      ...(afterAddToday?.newStarts ?? []),
+    ].map((item) => item.id)).toEqual(todayIds);
+
+    const logged = logAttempt(
+      plannedAfterAdd,
+      "daily_problem",
+      { result: "solved_clean" },
+      { now, idFactory: () => "daily_attempt" },
+    );
+    const plannedAfterLog = planNewProblemStarts(logged.data, {
+      now,
+      frozenTodayProblemIds,
+    });
+    const afterLogToday = getUpcomingPlan(plannedAfterLog, { now, days: 1 })[0];
+
+    expect(logged.attempt.plannedForDate).toBeUndefined();
+    expect([
+      ...(afterLogToday?.reviews ?? []),
+      ...(afterLogToday?.newStarts ?? []),
+    ].map((item) => item.id)).toEqual(todayIds);
   });
 
   it("keeps existing future new-start assignments stable", () => {
