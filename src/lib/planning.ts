@@ -634,6 +634,8 @@ export function refillTodayPlan(
   const existingPlan = getUpcomingPlan(data, { now, days: 1 })[0];
   const pendingCount = (existingPlan?.reviews.length ?? 0) + (existingPlan?.newStarts.length ?? 0);
   const completedCount = existingPlan?.completedCount ?? 0;
+  // Snoozed items keep their slot, so refill must add capacity on top of them to place the batch.
+  const deferredCount = existingPlan?.deferredCount ?? 0;
   const dailyTarget = getDailyTarget(data.settings);
   const batchSize = Math.max(1, options.count ?? dailyTarget);
   const candidates = getRefillCandidateProblems(data, today).slice(0, batchSize);
@@ -643,7 +645,7 @@ export function refillTodayPlan(
   }
 
   const candidateIds = new Set(candidates.map((problem) => problem.id));
-  const desiredCapacity = completedCount + pendingCount + candidates.length;
+  const desiredCapacity = completedCount + deferredCount + pendingCount + candidates.length;
   const extraCapacity = Math.max(
     getExtraDailyCapacity(data.settings, todayKey),
     Math.max(0, desiredCapacity - dailyTarget),

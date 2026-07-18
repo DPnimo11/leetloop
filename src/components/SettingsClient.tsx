@@ -8,6 +8,7 @@ import {
   clampDailyTarget,
   clampReservedNewStarts,
 } from "@/lib/settings";
+import type { LeetLoopSettings } from "@/types/storage";
 import { BackupControls } from "./BackupControls";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
@@ -22,12 +23,37 @@ type AccountInfo = {
 
 export function SettingsClient({ account }: { account: AccountInfo }) {
   const { data, ready, updateSettings } = useLeetLoop();
-  const [dailyTarget, setDailyTarget] = useState(data.settings.dailyTarget);
-  const [savedDailyTarget, setSavedDailyTarget] = useState(data.settings.dailyTarget);
-  const [reservedNewStarts, setReservedNewStarts] = useState(data.settings.reservedNewStartsPerDay);
-  const [savedReservedNewStarts, setSavedReservedNewStarts] = useState(
-    data.settings.reservedNewStartsPerDay,
+
+  if (!ready) {
+    return <EmptyState title="Loading settings" copy="Your data is loading." />;
+  }
+
+  // Mount the form only once data is loaded so its state seeds from saved settings, not defaults.
+  return (
+    <SettingsPanels
+      account={account}
+      initialDailyTarget={data.settings.dailyTarget}
+      initialReservedNewStarts={data.settings.reservedNewStartsPerDay}
+      updateSettings={updateSettings}
+    />
   );
+}
+
+function SettingsPanels({
+  account,
+  initialDailyTarget,
+  initialReservedNewStarts,
+  updateSettings,
+}: {
+  account: AccountInfo;
+  initialDailyTarget: number;
+  initialReservedNewStarts: number;
+  updateSettings: (updates: Partial<LeetLoopSettings>) => void;
+}) {
+  const [dailyTarget, setDailyTarget] = useState(initialDailyTarget);
+  const [savedDailyTarget, setSavedDailyTarget] = useState(initialDailyTarget);
+  const [reservedNewStarts, setReservedNewStarts] = useState(initialReservedNewStarts);
+  const [savedReservedNewStarts, setSavedReservedNewStarts] = useState(initialReservedNewStarts);
   const [message, setMessage] = useState("");
   const dirty =
     dailyTarget !== savedDailyTarget || reservedNewStarts !== savedReservedNewStarts;
@@ -52,10 +78,6 @@ export function SettingsClient({ account }: { account: AccountInfo }) {
     setSavedDailyTarget(dailyTarget);
     setSavedReservedNewStarts(reservedNewStarts);
     setMessage("Saved");
-  }
-
-  if (!ready) {
-    return <EmptyState title="Loading settings" copy="Your data is loading." />;
   }
 
   return (

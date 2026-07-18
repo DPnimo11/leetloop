@@ -861,4 +861,42 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[0]?.newStarts).toHaveLength(DAILY_PLAN_CAPACITY);
     expect(upcoming[1]?.newStarts).toHaveLength(1);
   });
+
+  it("refills a full batch when a snoozed item still holds a today slot", () => {
+    const completedAttempts: Attempt[] = Array.from(
+      { length: DAILY_PLAN_CAPACITY - 1 },
+      (_, index) => ({
+        id: `attempt_${index}`,
+        problemId: `done_${index}`,
+        attemptedAt: now.toISOString(),
+        result: "solved_clean",
+        plannedForDate: "2026-05-19",
+      }),
+    );
+    const refillCandidates = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) =>
+      problem({
+        id: `new_${index}`,
+        title: `New ${index}`,
+        nextReviewAt: "2026-05-20T12:00:00.000Z",
+      }),
+    );
+    const snoozed = problem({
+      id: "snoozed_1",
+      title: "Snoozed",
+      status: "reviewing",
+      nextReviewAt: "2026-05-19T00:00:00.000Z",
+    });
+    const snoozedData = snoozeProblem(
+      data([snoozed, ...refillCandidates], completedAttempts),
+      "snoozed_1",
+      { consumePlanSlot: true, now, until: new Date("2026-05-22T12:00:00.000Z") },
+    );
+    const result = refillTodayPlan(snoozedData, { now });
+    const upcoming = getUpcomingPlan(result.data, { now });
+
+    // The consumed slot must not shrink the batch the refill grants.
+    expect(upcoming[0]?.deferredCount).toBe(1);
+    expect(result.addedCount).toBe(DAILY_PLAN_CAPACITY);
+    expect(upcoming[0]?.newStarts).toHaveLength(DAILY_PLAN_CAPACITY);
+  });
 });

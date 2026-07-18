@@ -89,7 +89,7 @@ export function AnalyticsClient() {
 
   return (
     <div className="space-y-5">
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Problems attempted" value={attemptedProblemIds.size} />
         <StatCard label="Active problems" value={activeProblems.length} />
         <StatCard label="Due today" value={dueToday} />
