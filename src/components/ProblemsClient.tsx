@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { isDueOnOrBefore } from "@/lib/dates";
+import { STATUS_LABELS } from "@/lib/format";
 import { DIFFICULTIES, PROBLEM_STATUSES, type Difficulty, type ProblemStatus } from "@/types/problem";
 import { DEFAULT_PATTERN_TAGS } from "@/lib/tags";
 import { getProblemAvailability, isProblemAvailable, type ProblemAvailability } from "@/lib/availability";
@@ -114,7 +115,7 @@ export function ProblemsClient() {
             <option value="all">All statuses</option>
             {PROBLEM_STATUSES.map((item) => (
               <option key={item} value={item}>
-                {item}
+                {STATUS_LABELS[item]}
               </option>
             ))}
           </select>
