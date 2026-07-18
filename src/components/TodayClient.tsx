@@ -182,8 +182,7 @@ export function TodayClient() {
   const completedToday = getCompletedDailyAttempts(data.attempts, today);
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
-  const canRefillToday =
-    readyCount === 0 && deferredTodayCount === 0 && refillCandidateCount > 0;
+  const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
   const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
   const heroText = readyCount
     ? `${readyCount} of ${dailyPlanTotal} left today`

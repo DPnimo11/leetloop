@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
-import { isDueOnOrBefore, isOverdue } from "@/lib/dates";
+import { isDueOnOrBefore } from "@/lib/dates";
 import { DIFFICULTIES, PROBLEM_STATUSES, type Difficulty, type ProblemStatus } from "@/types/problem";
 import { DEFAULT_PATTERN_TAGS } from "@/lib/tags";
 import { getProblemAvailability, isProblemAvailable, type ProblemAvailability } from "@/lib/availability";
@@ -11,7 +11,7 @@ import { EmptyState } from "./EmptyState";
 import { ProblemCard } from "./ProblemCard";
 import { useLeetLoop } from "./LeetLoopProvider";
 
-type DueFilter = "all" | "due" | "overdue" | "not-due";
+type DueFilter = "all" | "due" | "not-due";
 type AvailabilityFilter = "all" | ProblemAvailability;
 
 export function ProblemsClient() {
@@ -48,11 +48,9 @@ export function ProblemsClient() {
       const matchesAvailability =
         availability === "all" || availability === problemAvailability;
       const due = available && isDueOnOrBefore(problem.nextReviewAt, today);
-      const overdue = available && isOverdue(problem.nextReviewAt, today);
       const matchesDue =
         dueFilter === "all" ||
         (dueFilter === "due" && due) ||
-        (dueFilter === "overdue" && overdue) ||
         (dueFilter === "not-due" && !due);
 
       return (
@@ -141,7 +139,6 @@ export function ProblemsClient() {
           >
             <option value="all">All reviews</option>
             <option value="due">Due</option>
-            <option value="overdue">Overdue</option>
             <option value="not-due">Not due</option>
           </select>
 

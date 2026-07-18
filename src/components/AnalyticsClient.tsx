@@ -1,7 +1,7 @@
 "use client";
 
 import { SHAKY_ATTEMPT_RESULTS, type AttemptResult } from "@/types/attempt";
-import { isDueToday, isOverdue } from "@/lib/dates";
+import { isDueToday } from "@/lib/dates";
 import { isProblemAvailable } from "@/lib/availability";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
@@ -32,9 +32,6 @@ export function AnalyticsClient() {
   const attemptedProblemIds = new Set(data.attempts.map((attempt) => attempt.problemId));
   const dueToday = data.problems.filter(
     (problem) => isProblemAvailable(problem, today) && isDueToday(problem.nextReviewAt, today),
-  ).length;
-  const overdue = data.problems.filter(
-    (problem) => isProblemAvailable(problem, today) && isOverdue(problem.nextReviewAt, today),
   ).length;
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const shakyResults = new Set<AttemptResult>(SHAKY_ATTEMPT_RESULTS);
@@ -92,11 +89,10 @@ export function AnalyticsClient() {
 
   return (
     <div className="space-y-5">
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Problems attempted" value={attemptedProblemIds.size} />
         <StatCard label="Active problems" value={activeProblems.length} />
         <StatCard label="Due today" value={dueToday} />
-        <StatCard label="Overdue" value={overdue} />
       </section>
 
       <section className="grid gap-5 lg:grid-cols-2">

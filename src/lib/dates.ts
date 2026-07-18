@@ -46,16 +46,6 @@ export function isDueToday(nextReviewAt: string | undefined, today = new Date())
   return toLocalDateKey(nextReviewDate) === toLocalDateKey(today);
 }
 
-export function isOverdue(nextReviewAt: string | undefined, today = new Date()): boolean {
-  const nextReviewDate = parseDate(nextReviewAt);
-
-  if (!nextReviewDate) {
-    return false;
-  }
-
-  return toLocalDateKey(nextReviewDate) < toLocalDateKey(today);
-}
-
 export function sortByNewestDate<T>(items: T[], getDate: (item: T) => string | undefined): T[] {
   return [...items].sort((a, b) => {
     const aTime = parseDate(getDate(a))?.getTime() ?? 0;

@@ -8,7 +8,6 @@ import {
   clampDailyTarget,
   clampReservedNewStarts,
 } from "@/lib/settings";
-import type { LeetLoopSettings } from "@/types/storage";
 import { BackupControls } from "./BackupControls";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
@@ -23,6 +22,37 @@ type AccountInfo = {
 
 export function SettingsClient({ account }: { account: AccountInfo }) {
   const { data, ready, updateSettings } = useLeetLoop();
+  const [dailyTarget, setDailyTarget] = useState(data.settings.dailyTarget);
+  const [savedDailyTarget, setSavedDailyTarget] = useState(data.settings.dailyTarget);
+  const [reservedNewStarts, setReservedNewStarts] = useState(data.settings.reservedNewStartsPerDay);
+  const [savedReservedNewStarts, setSavedReservedNewStarts] = useState(
+    data.settings.reservedNewStartsPerDay,
+  );
+  const [message, setMessage] = useState("");
+  const dirty =
+    dailyTarget !== savedDailyTarget || reservedNewStarts !== savedReservedNewStarts;
+
+  function changeDailyTarget(nextValue: number) {
+    const nextTarget = clampDailyTarget(nextValue);
+    setDailyTarget(nextTarget);
+    setReservedNewStarts((current) => clampReservedNewStarts(current, nextTarget));
+    setMessage("");
+  }
+
+  function changeReservedNewStarts(nextValue: number) {
+    setReservedNewStarts(clampReservedNewStarts(nextValue, dailyTarget));
+    setMessage("");
+  }
+
+  function saveSettings() {
+    updateSettings({
+      dailyTarget,
+      reservedNewStartsPerDay: reservedNewStarts,
+    });
+    setSavedDailyTarget(dailyTarget);
+    setSavedReservedNewStarts(reservedNewStarts);
+    setMessage("Saved");
+  }
 
   if (!ready) {
     return <EmptyState title="Loading settings" copy="Your data is loading." />;
@@ -32,12 +62,43 @@ export function SettingsClient({ account }: { account: AccountInfo }) {
     <div className="space-y-5">
       <AccountSection account={account} />
       <SettingsForm
-        initialDailyTarget={data.settings.dailyTarget}
-        initialReservedNewStarts={data.settings.reservedNewStartsPerDay}
-        updateSettings={updateSettings}
+        changeDailyTarget={changeDailyTarget}
+        changeReservedNewStarts={changeReservedNewStarts}
+        dailyTarget={dailyTarget}
+        dirty={dirty}
+        reservedNewStarts={reservedNewStarts}
+        saveSettings={saveSettings}
       />
+      <SaveBar dirty={dirty} message={message} saveSettings={saveSettings} />
       <BackupControls />
     </div>
+  );
+}
+
+function SaveBar({
+  dirty,
+  message,
+  saveSettings,
+}: {
+  dirty: boolean;
+  message: string;
+  saveSettings: () => void;
+}) {
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-[var(--muted)]">
+        {message || (dirty ? "You have unsaved changes." : "Settings are up to date.")}
+      </p>
+      <button
+        className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 text-sm font-semibold text-white hover:bg-[var(--accent-strong)] disabled:cursor-default disabled:bg-[#98a2b3]"
+        disabled={!dirty}
+        onClick={saveSettings}
+        type="button"
+      >
+        {dirty ? <Save size={15} /> : <Check size={15} />}
+        {dirty ? "Save" : "Saved"}
+      </button>
+    </section>
   );
 }
 
@@ -96,44 +157,20 @@ function AccountSection({ account }: { account: AccountInfo }) {
 }
 
 function SettingsForm({
-  initialDailyTarget,
-  initialReservedNewStarts,
-  updateSettings,
+  changeDailyTarget,
+  changeReservedNewStarts,
+  dailyTarget,
+  dirty,
+  reservedNewStarts,
+  saveSettings,
 }: {
-  initialDailyTarget: number;
-  initialReservedNewStarts: number;
-  updateSettings: (updates: Partial<LeetLoopSettings>) => void;
+  changeDailyTarget: (nextValue: number) => void;
+  changeReservedNewStarts: (nextValue: number) => void;
+  dailyTarget: number;
+  dirty: boolean;
+  reservedNewStarts: number;
+  saveSettings: () => void;
 }) {
-  const [dailyTarget, setDailyTarget] = useState(initialDailyTarget);
-  const [savedDailyTarget, setSavedDailyTarget] = useState(initialDailyTarget);
-  const [reservedNewStarts, setReservedNewStarts] = useState(initialReservedNewStarts);
-  const [savedReservedNewStarts, setSavedReservedNewStarts] = useState(initialReservedNewStarts);
-  const [message, setMessage] = useState("");
-  const dirty =
-    dailyTarget !== savedDailyTarget || reservedNewStarts !== savedReservedNewStarts;
-
-  function changeDailyTarget(nextValue: number) {
-    const nextTarget = clampDailyTarget(nextValue);
-    setDailyTarget(nextTarget);
-    setReservedNewStarts((current) => clampReservedNewStarts(current, nextTarget));
-    setMessage("");
-  }
-
-  function changeReservedNewStarts(nextValue: number) {
-    setReservedNewStarts(clampReservedNewStarts(nextValue, dailyTarget));
-    setMessage("");
-  }
-
-  function saveSettings() {
-    updateSettings({
-      dailyTarget,
-      reservedNewStartsPerDay: reservedNewStarts,
-    });
-    setSavedDailyTarget(dailyTarget);
-    setSavedReservedNewStarts(reservedNewStarts);
-    setMessage("Saved");
-  }
-
   return (
     <section className="rounded-lg border border-[var(--border)] bg-white p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -178,15 +215,6 @@ function SettingsForm({
             type="button"
           >
             <Plus size={16} />
-          </button>
-          <button
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 text-sm font-semibold text-white hover:bg-[var(--accent-strong)] disabled:cursor-default disabled:bg-[#98a2b3]"
-            disabled={!dirty}
-            onClick={saveSettings}
-            type="button"
-          >
-            {dirty ? <Save size={15} /> : <Check size={15} />}
-            {dirty ? "Save" : "Saved"}
           </button>
         </div>
       </div>
@@ -237,7 +265,6 @@ function SettingsForm({
           No review slots will be planned while new problems are available.
         </p>
       ) : null}
-      {message ? <p className="mt-3 text-sm font-medium text-emerald-700">{message}</p> : null}
     </section>
   );
 }
