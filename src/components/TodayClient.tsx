@@ -184,6 +184,12 @@ export function TodayClient() {
   const refillCandidateCount = countRefillCandidateProblems(data, today);
   const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
   const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
+  const remainingNewProblemCount = activeProblems.filter((problem) => problem.status === "new").length;
+  const clearedNewProblemCount = activeProblems.length - remainingNewProblemCount;
+  const newProblemProgress =
+    activeProblems.length > 0
+      ? Math.round((clearedNewProblemCount / activeProblems.length) * 100)
+      : 100;
   const heroText = readyCount
     ? `${readyCount} of ${dailyPlanTotal} left today`
     : completedTodayCount || deferredTodayCount
@@ -291,6 +297,39 @@ export function TodayClient() {
         <div className="rounded-lg border border-[var(--border)] bg-white p-4">
           <p className="text-sm text-[var(--muted)]">New left</p>
           <p className="mt-1 text-2xl font-semibold">{plannedNewToday.length}</p>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-[var(--border)] bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-[var(--foreground)]">New problem queue</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              {remainingNewProblemCount
+                ? `${remainingNewProblemCount} more problem${remainingNewProblemCount === 1 ? "" : "s"} to solve before there are no new problems left.`
+                : "No new problems left."}
+            </p>
+          </div>
+          <p className="text-sm font-semibold text-[var(--accent-strong)]">
+            {newProblemProgress}% clear
+          </p>
+        </div>
+        <div
+          aria-label={`${remainingNewProblemCount} new problems left`}
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={newProblemProgress}
+          className="mt-4 h-3 overflow-hidden rounded-full bg-[var(--surface-subtle)]"
+          role="progressbar"
+        >
+          <div
+            className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
+            style={{ width: `${newProblemProgress}%` }}
+          />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-xs font-medium text-[var(--muted)]">
+          <span>{clearedNewProblemCount} cleared</span>
+          <span>{activeProblems.length} active</span>
         </div>
       </section>
 
