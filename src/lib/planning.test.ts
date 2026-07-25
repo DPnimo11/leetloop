@@ -3,6 +3,7 @@ import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { LeetLoopData } from "@/types/storage";
 import { createDefaultSettings } from "./settings";
+import { addDays, startOfLocalDay } from "./dates";
 import { DAILY_PLAN_CAPACITY, getUpcomingPlan, planNewProblemStarts, refillTodayPlan } from "./planning";
 import { addProblem, logAttempt, snoozeProblem } from "./storage";
 
@@ -139,6 +140,55 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[0]?.newStarts).toHaveLength(0);
     expect(upcoming[1]?.reviews).toHaveLength(3);
     expect("waitingReviews" in upcoming[0]!).toBe(false);
+  });
+
+  it("replans unfinished work at rollover without exceeding capacity or reserved new slots", () => {
+    const todayDate = startOfLocalDay(now);
+    const yesterday = addDays(todayDate, -1).toISOString();
+    const today = todayDate.toISOString();
+    const staleData = {
+      ...data([
+        ...Array.from({ length: 3 }, (_, index) =>
+          problem({
+            id: `leftover_${index}`,
+            status: "reviewing",
+            idealReviewAt: yesterday,
+            nextReviewAt: yesterday,
+          }),
+        ),
+        ...Array.from({ length: 5 }, (_, index) =>
+          problem({
+            id: `today_${index}`,
+            status: "reviewing",
+            idealReviewAt: today,
+            nextReviewAt: today,
+          }),
+        ),
+        problem({ id: "new_1", title: "New 1" }),
+      ]),
+      settings: {
+        dailyTarget: 5,
+        reservedNewStartsPerDay: 1,
+        extraDailyCapacity: {},
+      },
+    };
+
+    const staleToday = getUpcomingPlan(staleData, { now, days: 1 })[0];
+    expect(staleToday?.reviews).toHaveLength(8);
+    expect(staleToday?.capacity).toBe(5);
+
+    const replanned = planNewProblemStarts(staleData, { now });
+    const upcoming = getUpcomingPlan(replanned, { now, days: 2 });
+
+    expect(upcoming[0]?.load).toBe(5);
+    expect(upcoming[0]?.reviews).toHaveLength(4);
+    expect(upcoming[0]?.newStarts.map((item) => item.id)).toEqual(["new_1"]);
+    expect(
+      upcoming[0]?.reviews
+        .filter((item) => item.id.startsWith("leftover_"))
+        .map((item) => item.id),
+    ).toHaveLength(3);
+    expect(upcoming[1]?.reviews).toHaveLength(4);
   });
 
   it("supports reviews-first planning when the reserve is zero", () => {
