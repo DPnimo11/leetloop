@@ -30,6 +30,7 @@ type MutablePlanDay = {
   dateKey: string;
   capacity: number;
   completedCount: number;
+  completedNewStartCount: number;
   deferredCount: number;
   committedSlots: number;
   newSlots: number;
@@ -192,6 +193,62 @@ export function getCompletedProblemIdsForDate(data: LeetLoopData, date: Date): S
   return completedIds;
 }
 
+function getCompletedNewProblemIdsByDate(data: LeetLoopData): Map<string, Set<string>> {
+  const attemptsByProblem = new Map<
+    string,
+    { count: number; firstAttempt: LeetLoopData["attempts"][number] }
+  >();
+
+  for (const attempt of data.attempts) {
+    const current = attemptsByProblem.get(attempt.problemId);
+
+    if (!current) {
+      attemptsByProblem.set(attempt.problemId, { count: 1, firstAttempt: attempt });
+      continue;
+    }
+
+    current.count += 1;
+    const attemptTime = parseDate(attempt.attemptedAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const firstAttemptTime =
+      parseDate(current.firstAttempt.attemptedAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+
+    if (
+      attemptTime < firstAttemptTime ||
+      (attemptTime === firstAttemptTime && attempt.id.localeCompare(current.firstAttempt.id) < 0)
+    ) {
+      current.firstAttempt = attempt;
+    }
+  }
+
+  const problemById = new Map(data.problems.map((problem) => [problem.id, problem]));
+  const completedNewProblemIdsByDate = new Map<string, Set<string>>();
+
+  for (const [problemId, summary] of attemptsByProblem) {
+    const problem = problemById.get(problemId);
+    const plannedForDate = summary.firstAttempt.plannedForDate;
+
+    // A problem started in LeetLoop has one stored attempt per review count.
+    // Imported reviews can have prior review count without matching attempts,
+    // so their first local planned review must not satisfy a new-start reserve.
+    if (!problem || !plannedForDate || problem.reviewCount !== summary.count) {
+      continue;
+    }
+
+    const completedIds = completedNewProblemIdsByDate.get(plannedForDate) ?? new Set<string>();
+    completedIds.add(problemId);
+    completedNewProblemIdsByDate.set(plannedForDate, completedIds);
+  }
+
+  return completedNewProblemIdsByDate;
+}
+
+export function getCompletedNewProblemIdsForDate(
+  data: LeetLoopData,
+  date: Date,
+): Set<string> {
+  return getCompletedNewProblemIdsByDate(data).get(toLocalDateKey(date)) ?? new Set<string>();
+}
+
 export function getDeferredProblemIdsForDate(data: LeetLoopData, date: Date): Set<string> {
   const dateKey = toLocalDateKey(date);
 
@@ -205,6 +262,7 @@ export function getDeferredProblemIdsForDate(data: LeetLoopData, date: Date): Se
 function createMutablePlanDay(
   data: LeetLoopData,
   date: Date,
+  completedNewStartCount: number,
   dailyCapacity?: number,
 ): MutablePlanDay {
   const completedIds = getCompletedProblemIdsForDate(data, date);
@@ -215,6 +273,7 @@ function createMutablePlanDay(
     dateKey: toLocalDateKey(date),
     capacity: resolveDailyCapacity(data, date, dailyCapacity),
     completedCount: completedIds.size,
+    completedNewStartCount,
     deferredCount: [...deferredIds].filter((problemId) => !completedIds.has(problemId)).length,
     committedSlots: 0,
     newSlots: 0,
@@ -291,11 +350,19 @@ export function planDailyWork(
     ),
   );
   const planDays: MutablePlanDay[] = [];
+  const completedNewProblemIdsByDate = getCompletedNewProblemIdsByDate(data);
 
   function ensureDay(index: number): MutablePlanDay {
     while (planDays.length <= index) {
       const date = addDays(today, planDays.length);
-      const day = createMutablePlanDay(data, date, options.dailyCapacity);
+      const dateKey = toLocalDateKey(date);
+      const completedNewStartCount = completedNewProblemIdsByDate.get(dateKey)?.size ?? 0;
+      const day = createMutablePlanDay(
+        data,
+        date,
+        completedNewStartCount,
+        options.dailyCapacity,
+      );
 
       if (freezeToday && day.dateKey === todayKey) {
         // A frozen Today queue owns every remaining slot, including intentional
@@ -328,7 +395,11 @@ export function planDailyWork(
       0,
       day.capacity - day.completedCount - day.deferredCount - day.committedSlots,
     );
-    const reserved = Math.min(reservedNewStarts, unreservedNewCount, available);
+    const remainingReservedNewStarts = Math.max(
+      0,
+      reservedNewStarts - day.completedNewStartCount,
+    );
+    const reserved = Math.min(remainingReservedNewStarts, unreservedNewCount, available);
     day.newSlots = reserved;
     unreservedNewCount -= reserved;
   }
