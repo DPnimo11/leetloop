@@ -3,8 +3,14 @@ import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { LeetLoopData } from "@/types/storage";
 import { createDefaultSettings } from "./settings";
-import { addDays, startOfLocalDay } from "./dates";
-import { DAILY_PLAN_CAPACITY, getUpcomingPlan, planNewProblemStarts, refillTodayPlan } from "./planning";
+import { addDays, startOfLocalDay, toLocalDateKey } from "./dates";
+import {
+  DAILY_PLAN_CAPACITY,
+  getCompletedNewProblemIdsForDate,
+  getUpcomingPlan,
+  planNewProblemStarts,
+  refillTodayPlan,
+} from "./planning";
 import { addProblem, logAttempt, snoozeProblem } from "./storage";
 
 const now = new Date("2026-05-19T12:00:00.000Z");
@@ -704,6 +710,120 @@ describe("planNewProblemStarts", () => {
     expect(todayAfter?.newStarts).toHaveLength(0);
     expect(todayAfter?.completedCount).toBe(1);
     expect(todayAfter?.load).toBe(2);
+  });
+
+  it("keeps a completed planned new start counted toward the reserve after reload", () => {
+    const dueToday = startOfLocalDay(now).toISOString();
+    const initial = {
+      ...data([
+        problem({
+          id: "review_1",
+          title: "Max Consecutive Ones III",
+          status: "reviewing",
+          idealReviewAt: dueToday,
+          nextReviewAt: dueToday,
+        }),
+        problem({
+          id: "review_2",
+          title: "Other review",
+          status: "reviewing",
+          idealReviewAt: dueToday,
+          nextReviewAt: dueToday,
+        }),
+        ...Array.from({ length: 80 }, (_, index) =>
+          problem({
+            id: `new_${index}`,
+            title: `New ${index}`,
+            createdAt: "2026-05-01T00:00:00.000Z",
+          }),
+        ),
+      ]),
+      settings: {
+        dailyTarget: 5,
+        reservedNewStartsPerDay: 3,
+        extraDailyCapacity: {},
+      },
+    };
+    const planned = planNewProblemStarts(initial, { now });
+    const todayBefore = getUpcomingPlan(planned, { now, days: 1 })[0]!;
+    const loggedProblem = todayBefore.newStarts[0]!;
+    const logged = logAttempt(
+      planned,
+      loggedProblem.id,
+      { result: "solved_clean" },
+      { now, idFactory: () => "attempt_1" },
+    );
+    const frozenTodayProblemIds = new Set(
+      [...todayBefore.reviews, ...todayBefore.newStarts]
+        .filter((item) => item.id !== loggedProblem.id)
+        .map((item) => item.id),
+    );
+    const immediatelyAfterLog = planNewProblemStarts(logged.data, {
+      now,
+      frozenTodayProblemIds,
+    });
+    const todayAfterLog = getUpcomingPlan(immediatelyAfterLog, { now, days: 1 })[0]!;
+    const reloaded = planNewProblemStarts(immediatelyAfterLog, { now });
+    const todayAfterReload = getUpcomingPlan(reloaded, { now, days: 1 })[0]!;
+
+    expect(todayBefore.reviews).toHaveLength(2);
+    expect(todayBefore.newStarts).toHaveLength(3);
+    expect(todayAfterLog.reviews.map((item) => item.id)).toEqual(
+      todayBefore.reviews.map((item) => item.id),
+    );
+    expect(todayAfterLog.newStarts).toHaveLength(2);
+    expect(todayAfterReload.reviews.map((item) => item.id)).toEqual(
+      todayAfterLog.reviews.map((item) => item.id),
+    );
+    expect(todayAfterReload.newStarts.map((item) => item.id)).toEqual(
+      todayAfterLog.newStarts.map((item) => item.id),
+    );
+    expect(todayAfterReload.completedCount).toBe(1);
+    expect(todayAfterReload.load).toBe(5);
+  });
+
+  it("infers completed new starts conservatively from stored attempt history", () => {
+    const dateKey = toLocalDateKey(now);
+    const startedHere = problem({
+      id: "started_here",
+      status: "reviewing",
+      reviewCount: 2,
+    });
+    const importedReview = problem({
+      id: "imported_review",
+      status: "reviewing",
+      reviewCount: 2,
+    });
+    const completedNewIds = getCompletedNewProblemIdsForDate(
+      data(
+        [startedHere, importedReview],
+        [
+          {
+            id: "started_first",
+            problemId: startedHere.id,
+            attemptedAt: "2026-05-19T10:00:00.000Z",
+            result: "solved_clean",
+            plannedForDate: dateKey,
+          },
+          {
+            id: "started_second",
+            problemId: startedHere.id,
+            attemptedAt: "2026-05-19T11:00:00.000Z",
+            result: "solved_buggy",
+          },
+          {
+            id: "imported_first_local",
+            problemId: importedReview.id,
+            attemptedAt: "2026-05-19T10:30:00.000Z",
+            result: "solved_clean",
+            plannedForDate: dateKey,
+          },
+        ],
+      ),
+      now,
+    );
+
+    expect([...completedNewIds]).toEqual(["started_here"]);
   });
 
   it("does not change Today when an off-plan review is logged", () => {
