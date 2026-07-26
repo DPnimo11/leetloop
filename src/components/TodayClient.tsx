@@ -13,11 +13,11 @@ import {
   getPlannedDateKey,
   getUpcomingPlan,
 } from "@/lib/planning";
-import { getDailyCapacityForDate, getReservedNewStarts } from "@/lib/settings";
+import { getDailyCapacityForDate, getReservedNewStarts, isFocusModeEnabled } from "@/lib/settings";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
-import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { DifficultyBadge, PrimaryPatternBadge, StatusBadge, TagPill } from "./Badges";
 import { DailyLeetCodeCard } from "./DailyLeetCodeCard";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
@@ -41,6 +41,7 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
               {template.title}
             </a>
             <DifficultyBadge difficulty={template.difficulty} />
+            <PrimaryPatternBadge pattern={template.primaryPattern} />
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {template.patterns.slice(0, 5).map((tag) => (
@@ -72,6 +73,27 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
       </div>
     </article>
   );
+}
+
+// The concept most of today's new starts share, for the focus-mode label.
+function mostCommonPrimaryPattern(problems: Problem[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const problem of problems) {
+    if (problem.primaryPattern) {
+      counts.set(problem.primaryPattern, (counts.get(problem.primaryPattern) ?? 0) + 1);
+    }
+  }
+
+  let best: string | undefined;
+  let bestCount = 0;
+  for (const [pattern, count] of counts) {
+    if (count > bestCount) {
+      best = pattern;
+      bestCount = count;
+    }
+  }
+
+  return best;
 }
 
 function getCompletedDailyAttempts(attempts: Attempt[], today: Date): Attempt[] {
@@ -114,6 +136,7 @@ function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?
             </span>
             {problem ? <DifficultyBadge difficulty={problem.difficulty} /> : null}
             {problem ? <StatusBadge status={problem.status} /> : null}
+            {problem ? <PrimaryPatternBadge pattern={problem.primaryPattern} /> : null}
           </div>
           {problem ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -153,6 +176,9 @@ export function TodayClient() {
   const todayPlanDay = getUpcomingPlan(data, { now: today, days: 1 })[0];
   const plannedReviews = todayPlanDay?.reviews ?? [];
   const plannedNewToday = todayPlanDay?.newStarts ?? [];
+  const focusConcept = isFocusModeEnabled(data.settings)
+    ? mostCommonPrimaryPattern(plannedNewToday)
+    : undefined;
   const deferredTodayCount = todayPlanDay?.deferredCount ?? 0;
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const futurePlannedNewCount = activeProblems.filter(
@@ -243,9 +269,16 @@ export function TodayClient() {
     <div className="space-y-6">
       <section className="flex flex-col gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
-            Today
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
+              Today
+            </p>
+            {focusConcept ? (
+              <span className="inline-flex rounded-full border border-[var(--accent)] bg-[#e6f4f1] px-2 py-0.5 text-xs font-semibold text-[var(--accent-strong)]">
+                Focus: {focusConcept}
+              </span>
+            ) : null}
+          </div>
           <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
             {heroText}
           </h1>

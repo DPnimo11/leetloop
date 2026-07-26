@@ -7,7 +7,7 @@ import type { Problem } from "@/types/problem";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { formatAttemptResult, formatDate } from "@/lib/format";
 import { isProblemAvailable } from "@/lib/availability";
-import { AvailabilityBadge, DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { AvailabilityBadge, DifficultyBadge, PrimaryPatternBadge, StatusBadge, TagPill } from "./Badges";
 import { AttemptModal } from "./AttemptModal";
 import { SnoozeMenu } from "./SnoozeMenu";
 
@@ -28,6 +28,7 @@ export function ProblemCard({ problem }: { problem: Problem }) {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={problem.difficulty} />
             <StatusBadge status={problem.status} />
+            <PrimaryPatternBadge pattern={problem.primaryPattern} />
             <AvailabilityBadge problem={problem} />
             {available ? (
               <span className="text-sm text-[var(--muted)]">Planned: {formatDate(problem.nextReviewAt)}</span>

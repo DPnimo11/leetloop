@@ -6,6 +6,7 @@ import { isDifficulty, isPlatform, isProblemStatus } from "@/types/problem";
 import type { LeetLoopData, LeetLoopSettings } from "@/types/storage";
 import { STORAGE_VERSION } from "@/lib/storage";
 import { createDefaultSettings, normalizeSettings } from "@/lib/settings";
+import { inferPrimaryPattern } from "@/lib/tags";
 
 /**
  * Cloud persistence layer. Mirrors the localStorage model: the app keeps the
@@ -21,6 +22,7 @@ type ProblemRow = {
   platform: string;
   difficulty: string;
   patterns: string[] | null;
+  primary_pattern: string | null;
   status: string;
   notes: string | null;
   last_attempted_at: string | null;
@@ -54,6 +56,7 @@ type SettingsRow = {
   daily_target: number | null;
   reserved_new_starts_per_day: number | null;
   extra_daily_capacity: Record<string, number> | null;
+  focus_mode: boolean | null;
 };
 
 // --- row <-> app mappers -----------------------------------------------------
@@ -67,6 +70,7 @@ function problemToRow(problem: Problem, userId: string): ProblemRow {
     platform: problem.platform,
     difficulty: problem.difficulty,
     patterns: problem.patterns,
+    primary_pattern: problem.primaryPattern ?? null,
     status: problem.status,
     notes: problem.notes ?? null,
     last_attempted_at: problem.lastAttemptedAt ?? null,
@@ -90,13 +94,18 @@ function rowToProblem(row: ProblemRow): Problem | undefined {
     return undefined;
   }
 
+  const patterns = Array.isArray(row.patterns) ? row.patterns : [];
+
   return {
     id: row.id,
     title: row.title,
     url: row.url,
     platform: row.platform,
     difficulty: row.difficulty,
-    patterns: Array.isArray(row.patterns) ? row.patterns : [],
+    patterns,
+    // Back-fill a concept for problems saved before primaryPattern existed.
+    // Section-blind (priority only); persists on the problem's next sync.
+    primaryPattern: row.primary_pattern ?? inferPrimaryPattern(patterns),
     status: row.status,
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
@@ -151,6 +160,7 @@ function settingsToRow(settings: LeetLoopSettings, userId: string): SettingsRow 
     daily_target: settings.dailyTarget,
     reserved_new_starts_per_day: settings.reservedNewStartsPerDay,
     extra_daily_capacity: settings.extraDailyCapacity,
+    focus_mode: settings.focusMode ?? false,
   };
 }
 
@@ -187,6 +197,7 @@ export async function loadCloudData(
         dailyTarget: settingsRow.daily_target ?? undefined,
         reservedNewStartsPerDay: settingsRow.reserved_new_starts_per_day ?? undefined,
         extraDailyCapacity: settingsRow.extra_daily_capacity ?? {},
+        focusMode: settingsRow.focus_mode ?? false,
       })
     : createDefaultSettings();
 

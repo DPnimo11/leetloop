@@ -15,6 +15,7 @@ export type Problem = {
   platform: Platform;
   difficulty: Difficulty;
   patterns: string[];
+  primaryPattern?: string;
   status: ProblemStatus;
   notes?: string;
   createdAt: string;
@@ -38,6 +39,7 @@ export type ProblemInput = {
   platform?: Platform;
   difficulty: Difficulty;
   patterns?: string[];
+  primaryPattern?: string;
   status?: ProblemStatus;
   notes?: string;
   leetcodeSlug?: string;

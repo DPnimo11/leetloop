@@ -12,6 +12,7 @@ export type ProblemTemplate = {
   platform: "LeetCode";
   difficulty: Difficulty;
   patterns: string[];
+  primaryPattern?: string;
   sourceSetSlugs: BuiltInProblemSetSlug[];
   sourceGroups: string[];
   questionFrontendId?: string;

@@ -8,7 +8,7 @@ import { formatAttemptResult, formatDate, formatDateTime, STATUS_LABELS } from "
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { getProblemSetName } from "@/lib/problemSets";
 import { getProblemAvailability } from "@/lib/availability";
-import { AvailabilityBadge, DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { AvailabilityBadge, DifficultyBadge, PrimaryPatternBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { AttemptModal } from "./AttemptModal";
 import { useLeetLoop } from "./LeetLoopProvider";
@@ -67,6 +67,7 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
             <div className="flex flex-wrap items-center gap-2">
               <DifficultyBadge difficulty={currentProblem.difficulty} />
               <StatusBadge status={currentProblem.status} />
+              <PrimaryPatternBadge pattern={currentProblem.primaryPattern} />
               <AvailabilityBadge problem={currentProblem} />
               {sourceSets.map((set) => (
                 <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-semibold text-[var(--muted)]" key={set}>
@@ -161,6 +162,26 @@ export function ProblemDetailClient({ problemId }: { problemId: string }) {
         <aside className="rounded-lg border border-[var(--border)] bg-white p-5">
           <h2 className="text-lg font-semibold tracking-normal">Details</h2>
           <dl className="mt-3 space-y-3 text-sm">
+            <div>
+              <dt className="font-semibold text-[var(--muted)]">Primary concept</dt>
+              <dd>
+                {currentProblem.patterns.length ? (
+                  <select
+                    className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+                    onChange={(event) => updateProblem(currentProblem.id, { primaryPattern: event.target.value })}
+                    value={currentProblem.primaryPattern ?? ""}
+                  >
+                    {currentProblem.patterns.map((tag) => (
+                      <option key={tag} value={tag}>
+                        {tag}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-[var(--muted)]">No pattern tags</span>
+                )}
+              </dd>
+            </div>
             <div>
               <dt className="font-semibold text-[var(--muted)]">Status</dt>
               <dd>{STATUS_LABELS[currentProblem.status]}</dd>

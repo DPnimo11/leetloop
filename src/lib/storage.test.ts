@@ -206,6 +206,7 @@ describe("storage helpers", () => {
       dailyTarget: 5,
       reservedNewStartsPerDay: 1,
       extraDailyCapacity: {},
+      focusMode: false,
     });
   });
 
@@ -261,6 +262,7 @@ describe("storage helpers", () => {
       extraDailyCapacity: {
         "2026-05-18": 3,
       },
+      focusMode: false,
     });
   });
 
