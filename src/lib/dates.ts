@@ -10,6 +10,11 @@ export function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+export function millisecondsUntilNextLocalDay(now = new Date()): number {
+  const nextDay = startOfLocalDay(addDays(now, 1));
+  return Math.max(0, nextDay.getTime() - now.getTime());
+}
+
 export function toLocalDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");

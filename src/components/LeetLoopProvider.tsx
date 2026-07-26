@@ -29,6 +29,7 @@ import {
   updateSettings as updateSettingsInData,
 } from "@/lib/storage";
 import { isTemplateAdded } from "@/lib/problemSets";
+import { millisecondsUntilNextLocalDay, toLocalDateKey } from "@/lib/dates";
 import {
   getUpcomingPlan,
   planDailyWork,
@@ -103,6 +104,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
   // Serializes cloud writes so concurrent mutations apply in order.
   const syncQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingSyncRef = useRef(0);
+  const lastPlannedDateKeyRef = useRef<string | undefined>(undefined);
 
   const enqueueSync = useCallback(
     (prev: LeetLoopData, next: LeetLoopData): Promise<void> => {
@@ -158,6 +160,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
         if (!user) {
           const emptyData = createEmptyData();
+          lastPlannedDateKeyRef.current = toLocalDateKey(new Date());
           dataRef.current = emptyData;
           setData(emptyData);
           return;
@@ -170,7 +173,9 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const planned = touchUpdatedAt(planDailyWork(loaded));
+        const planningNow = new Date();
+        const planned = touchUpdatedAt(planDailyWork(loaded, { now: planningNow }));
+        lastPlannedDateKeyRef.current = toLocalDateKey(planningNow);
         dataRef.current = planned;
         setData(planned);
         // Persist any planning side effects that ran on load.
@@ -182,6 +187,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
           return;
         }
         const emptyData = createEmptyData();
+        lastPlannedDateKeyRef.current = toLocalDateKey(new Date());
         setLoadError(error instanceof Error ? error.message : "Could not load your data.");
         dataRef.current = emptyData;
         setData(emptyData);
@@ -196,6 +202,72 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [supabase, enqueueSync]);
+
+  const replanForLocalDayChange = useCallback((now = new Date()) => {
+    const dateKey = toLocalDateKey(now);
+
+    if (lastPlannedDateKeyRef.current === dateKey) {
+      return;
+    }
+
+    lastPlannedDateKeyRef.current = dateKey;
+
+    if (!userIdRef.current) {
+      return;
+    }
+
+    const prev = dataRef.current;
+    const planned = planDailyWork(prev, { now });
+    const next = touchUpdatedAt(planned);
+    dataRef.current = next;
+    setData(next);
+
+    if (planned !== prev) {
+      enqueueSync(prev, next);
+    }
+  }, [enqueueSync]);
+
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
+    let midnightTimer: number | undefined;
+
+    function scheduleMidnightReplan() {
+      if (midnightTimer !== undefined) {
+        window.clearTimeout(midnightTimer);
+      }
+
+      midnightTimer = window.setTimeout(() => {
+        replanForLocalDayChange();
+        scheduleMidnightReplan();
+      }, millisecondsUntilNextLocalDay() + 50);
+    }
+
+    function handleFocus() {
+      replanForLocalDayChange();
+      scheduleMidnightReplan();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        handleFocus();
+      }
+    }
+
+    scheduleMidnightReplan();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      if (midnightTimer !== undefined) {
+        window.clearTimeout(midnightTimer);
+      }
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [ready, replanForLocalDayChange]);
 
   useEffect(() => {
     const now = Date.now();
@@ -218,7 +290,9 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
     const timeout = window.setTimeout(() => {
       const prev = dataRef.current;
-      const planned = planDailyWork(prev, { now: new Date() });
+      const planningNow = new Date();
+      const planned = planDailyWork(prev, { now: planningNow });
+      lastPlannedDateKeyRef.current = toLocalDateKey(planningNow);
 
       if (planned === prev) {
         return;
@@ -241,7 +315,12 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
         return next.result;
       }
 
-      const planned = touchUpdatedAt(planDailyWork(next.data, next.planningOptions));
+      const planningNow = next.planningOptions?.now ?? new Date();
+      const planningOptions = next.planningOptions
+        ? { ...next.planningOptions, now: planningNow }
+        : { now: planningNow };
+      const planned = touchUpdatedAt(planDailyWork(next.data, planningOptions));
+      lastPlannedDateKeyRef.current = toLocalDateKey(planningNow);
       dataRef.current = planned;
       setData(planned);
       enqueueSync(prev, planned);
@@ -356,7 +435,9 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
   const importJson = useCallback(async (raw: string) => {
     const imported = importDataFromStorage(raw);
     const prev = dataRef.current;
-    const planned = touchUpdatedAt(planDailyWork(imported));
+    const planningNow = new Date();
+    const planned = touchUpdatedAt(planDailyWork(imported, { now: planningNow }));
+    lastPlannedDateKeyRef.current = toLocalDateKey(planningNow);
     dataRef.current = planned;
     setData(planned);
     // Await the cloud write so the caller only reports success once it lands.
