@@ -421,11 +421,16 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
 
   const repopulateToday = useCallback(() => {
     return commit<number>((current) => {
-      const next = refillTodayPlan(current);
+      const now = new Date();
+      const next = refillTodayPlan(current, { now });
 
       return {
         data: next.data,
         result: next.addedCount,
+        planningOptions: {
+          now,
+          frozenTodayProblemIds: next.frozenTodayProblemIds,
+        },
       };
     });
   }, [commit]);

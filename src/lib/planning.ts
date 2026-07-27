@@ -307,8 +307,25 @@ export function planDailyWork(
   const today = startOfLocalDay(now);
   const todayKey = toLocalDateKey(today);
   const newStartPlanningDays = options.days ?? UPCOMING_PLAN_DAYS;
-  const freezeToday = options.frozenTodayProblemIds !== undefined;
-  const requestedFrozenIds = options.frozenTodayProblemIds ?? new Set<string>();
+  // Extra capacity only comes from an explicit refill. Preserve its remaining
+  // queue across reloads just like the in-memory freeze used while logging.
+  const persistedRefillProblemIds =
+    options.frozenTodayProblemIds === undefined &&
+    getExtraDailyCapacity(data.settings, todayKey) > 0
+      ? new Set(
+          [
+            ...getReviewsForDate(data.problems, today, now),
+            ...getNewStartsForDate(data.problems, today, now, data.settings),
+          ].map((problem) => problem.id),
+        )
+      : undefined;
+  const freezeToday =
+    options.frozenTodayProblemIds !== undefined ||
+    persistedRefillProblemIds !== undefined;
+  const requestedFrozenIds =
+    options.frozenTodayProblemIds ??
+    persistedRefillProblemIds ??
+    new Set<string>();
   const frozenProblems = data.problems.filter(
     (problem) =>
       requestedFrozenIds.has(problem.id) &&
@@ -717,10 +734,15 @@ export function countUnscheduledNewProblems(data: LeetLoopData, now = new Date()
 export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Problem[] {
   const dateKey = toLocalDateKey(date);
   const candidates = data.problems.filter(
-    (problem) =>
-      isNewProblem(problem) &&
-      isProblemAvailable(problem, date) &&
-      getPlannedDateKey(problem) !== dateKey,
+    (problem) => {
+      const plannedDateKey = getPlannedDateKey(problem);
+
+      return (
+        isNewProblem(problem) &&
+        isProblemAvailable(problem, date) &&
+        (!plannedDateKey || plannedDateKey > dateKey)
+      );
+    },
   );
 
   // In focus mode, refill continues the largest remaining category rather than
@@ -730,8 +752,32 @@ export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Prob
     : sortByPlanThenCreatedDate(candidates);
 }
 
+function getDueRefillReviewProblems(data: LeetLoopData, date: Date): Problem[] {
+  const dateKey = toLocalDateKey(date);
+
+  return sortByIdealReviewDate(
+    data.problems.filter((problem) => {
+      if (!isReviewProblem(problem) || !isProblemAvailable(problem, date)) {
+        return false;
+      }
+
+      const idealDateKey = getIdealReviewDateKey(problem);
+      const plannedDateKey = getPlannedDateKey(problem);
+
+      return Boolean(
+        idealDateKey &&
+          idealDateKey <= dateKey &&
+          (!plannedDateKey || plannedDateKey > dateKey),
+      );
+    }),
+  );
+}
+
 export function countRefillCandidateProblems(data: LeetLoopData, date: Date): number {
-  return getRefillCandidateProblems(data, date).length;
+  return (
+    getRefillCandidateProblems(data, date).length +
+    getDueRefillReviewProblems(data, date).length
+  );
 }
 
 export function refillTodayPlan(
@@ -740,29 +786,64 @@ export function refillTodayPlan(
     now?: Date;
     count?: number;
   } = {},
-): { data: LeetLoopData; addedCount: number } {
+): {
+  data: LeetLoopData;
+  addedCount: number;
+  frozenTodayProblemIds: ReadonlySet<string>;
+} {
   const now = options.now ?? new Date();
   const today = startOfLocalDay(now);
   const todayKey = toLocalDateKey(today);
   const existingPlan = getUpcomingPlan(data, { now, days: 1 })[0];
-  const pendingCount = (existingPlan?.reviews.length ?? 0) + (existingPlan?.newStarts.length ?? 0);
+  const pendingProblems = existingPlan
+    ? [...existingPlan.reviews, ...existingPlan.newStarts]
+    : [];
+  const pendingCount = pendingProblems.length;
   const completedCount = existingPlan?.completedCount ?? 0;
-  // Snoozed items keep their slot, so refill must add capacity on top of them to place the batch.
   const deferredCount = existingPlan?.deferredCount ?? 0;
   const dailyTarget = getDailyTarget(data.settings);
   const batchSize = Math.max(1, options.count ?? dailyTarget);
-  const candidates = getRefillCandidateProblems(data, today).slice(0, batchSize);
+  const newCandidates = getRefillCandidateProblems(data, now);
+  const dueReviewCandidates = getDueRefillReviewProblems(data, now);
+  // A refill is a fresh batch: protect its configured new-start share, then
+  // fill the rest with already-due reviews before using additional new starts.
+  const reservedNewCount = Math.min(
+    getReservedNewStarts(data.settings),
+    batchSize,
+    newCandidates.length,
+  );
+  const reservedNewStarts = newCandidates.slice(0, reservedNewCount);
+  const selectedReviews = dueReviewCandidates.slice(
+    0,
+    batchSize - reservedNewStarts.length,
+  );
+  const remainingSlots =
+    batchSize - reservedNewStarts.length - selectedReviews.length;
+  const additionalNewStarts = newCandidates.slice(
+    reservedNewStarts.length,
+    reservedNewStarts.length + remainingSlots,
+  );
+  const candidates = [
+    ...selectedReviews,
+    ...reservedNewStarts,
+    ...additionalNewStarts,
+  ];
 
   if (!candidates.length) {
-    return { data, addedCount: 0 };
+    return {
+      data,
+      addedCount: 0,
+      frozenTodayProblemIds: new Set(pendingProblems.map((problem) => problem.id)),
+    };
   }
 
   const candidateIds = new Set(candidates.map((problem) => problem.id));
   const desiredCapacity = completedCount + deferredCount + pendingCount + candidates.length;
-  const extraCapacity = Math.max(
-    getExtraDailyCapacity(data.settings, todayKey),
-    Math.max(0, desiredCapacity - dailyTarget),
-  );
+  const extraCapacity = Math.max(0, desiredCapacity - dailyTarget);
+  const frozenTodayProblemIds = new Set([
+    ...pendingProblems.map((problem) => problem.id),
+    ...candidateIds,
+  ]);
   const todayIso = today.toISOString();
   const updatedAt = now.toISOString();
   const nextData: LeetLoopData = {
@@ -781,10 +862,11 @@ export function refillTodayPlan(
     ),
     updatedAt,
   };
-  const plannedData = planDailyWork(nextData, { now });
-  const addedCount = plannedData.problems.filter(
-    (problem) => candidateIds.has(problem.id) && getPlannedDateKey(problem) === todayKey,
-  ).length;
+  const plannedData = planDailyWork(nextData, { now, frozenTodayProblemIds });
 
-  return { data: plannedData, addedCount };
+  return {
+    data: plannedData,
+    addedCount: candidates.length,
+    frozenTodayProblemIds,
+  };
 }

@@ -209,7 +209,7 @@ export function TodayClient() {
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
   const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
-  const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
+  const dailyPlanTotal = readyCount + completedTodayCount;
   const remainingNewProblemCount = activeProblems.filter((problem) => problem.status === "new").length;
   const clearedNewProblemCount = activeProblems.length - remainingNewProblemCount;
   const newProblemProgress =
@@ -261,56 +261,58 @@ export function TodayClient() {
     setRefillMessage(
       addedCount
         ? `Added ${addedCount} more to today.`
-        : "No queued new problems are available.",
+        : "No eligible upcoming work is available.",
     );
   }
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
-              Today
-            </p>
-            {focusConcept ? (
-              <span className="inline-flex rounded-full border border-[var(--accent)] bg-[#e6f4f1] px-2 py-0.5 text-xs font-semibold text-[var(--accent-strong)]">
-                Focus: {focusConcept}
-              </span>
-            ) : null}
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
+                Today
+              </p>
+              {focusConcept ? (
+                <span className="inline-flex rounded-full border border-[var(--accent)] bg-[#e6f4f1] px-2 py-0.5 text-xs font-semibold text-[var(--accent-strong)]">
+                  Focus: {focusConcept}
+                </span>
+              ) : null}
+            </div>
+            <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
+              {heroText}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">{heroCopy}</p>
           </div>
-          <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
-            {heroText}
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">{heroCopy}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canRefillToday ? (
-            <button
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
-              onClick={addMoreToday}
-              type="button"
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {canRefillToday ? (
+              <button
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
+                onClick={addMoreToday}
+                type="button"
+              >
+                <RefreshCw size={16} />
+                Add more today
+              </button>
+            ) : null}
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+              href="/add"
             >
-              <RefreshCw size={16} />
-              Add more today
-            </button>
-          ) : null}
-          <Link
-            className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
-            href="/add"
-          >
-            <Plus size={16} />
-            Add problem
-          </Link>
-          <Link
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
-            href="/problem-sets"
-          >
-            Browse sets
-          </Link>
+              <Plus size={16} />
+              Add problem
+            </Link>
+            <Link
+              className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+              href="/problem-sets"
+            >
+              Browse sets
+            </Link>
+          </div>
         </div>
         {refillMessage ? (
-          <p className="text-sm font-medium text-emerald-700 sm:basis-full">{refillMessage}</p>
+          <p className="mt-4 text-sm font-medium text-emerald-700">{refillMessage}</p>
         ) : null}
       </section>
 

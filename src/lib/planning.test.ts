@@ -1032,6 +1032,143 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[1]?.newStarts).toHaveLength(1);
   });
 
+  it("gives an explicit refill its own new-start reserve", () => {
+    const todayIso = startOfLocalDay(now).toISOString();
+    const tomorrowIso = addDays(startOfLocalDay(now), 1).toISOString();
+    const completedProblems = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) =>
+      problem({
+        id: `done_${index}`,
+        title: `Done ${index}`,
+        status: "reviewing",
+        reviewCount: index < 3 ? 1 : 2,
+      }),
+    );
+    const completedAttempts: Attempt[] = completedProblems.map((item, index) => ({
+      id: `attempt_${index}`,
+      problemId: item.id,
+      attemptedAt: now.toISOString(),
+      result: "solved_clean",
+      plannedForDate: "2026-05-19",
+    }));
+    const dueReviews = Array.from({ length: 3 }, (_, index) =>
+      problem({
+        id: `due_review_${index}`,
+        title: `Due review ${index}`,
+        status: "reviewing",
+        idealReviewAt: todayIso,
+        nextReviewAt: tomorrowIso,
+      }),
+    );
+    const futureReview = problem({
+      id: "future_review",
+      title: "Future review",
+      status: "reviewing",
+      idealReviewAt: tomorrowIso,
+      nextReviewAt: tomorrowIso,
+    });
+    const newStarts = Array.from({ length: 5 }, (_, index) =>
+      problem({
+        id: `new_${index}`,
+        title: `New ${index}`,
+        nextReviewAt: tomorrowIso,
+      }),
+    );
+    const initial: LeetLoopData = {
+      ...data([...completedProblems, ...dueReviews, futureReview, ...newStarts], completedAttempts),
+      settings: {
+        dailyTarget: 5,
+        reservedNewStartsPerDay: 3,
+        extraDailyCapacity: {},
+      },
+    };
+
+    const result = refillTodayPlan(initial, { now });
+    const today = getUpcomingPlan(result.data, { now, days: 1 })[0]!;
+
+    expect(result.addedCount).toBe(5);
+    expect(today.reviews.map((item) => item.id)).toEqual(["due_review_0", "due_review_1"]);
+    expect(today.newStarts.map((item) => item.id)).toEqual(["new_0", "new_1", "new_2"]);
+    expect(today.reviews.some((item) => item.id === futureReview.id)).toBe(false);
+    expect(today.completedCount).toBe(5);
+    expect(today.load).toBe(10);
+    expect(today.capacity).toBe(10);
+
+    const completedRefillProblem = today.newStarts[0]!;
+    const logged = logAttempt(
+      result.data,
+      completedRefillProblem.id,
+      { result: "solved_clean" },
+      { now, idFactory: () => "refill_attempt" },
+    );
+    const frozenTodayProblemIds = new Set(
+      [...today.reviews, ...today.newStarts]
+        .filter((item) => item.id !== completedRefillProblem.id)
+        .map((item) => item.id),
+    );
+    const immediatelyAfterLog = planNewProblemStarts(logged.data, {
+      now,
+      frozenTodayProblemIds,
+    });
+    const todayAfterLog = getUpcomingPlan(immediatelyAfterLog, { now, days: 1 })[0]!;
+    const reloaded = planNewProblemStarts(immediatelyAfterLog, { now });
+    const todayAfterReload = getUpcomingPlan(reloaded, { now, days: 1 })[0]!;
+
+    expect(todayAfterReload.reviews.map((item) => item.id)).toEqual(
+      todayAfterLog.reviews.map((item) => item.id),
+    );
+    expect(todayAfterReload.newStarts.map((item) => item.id)).toEqual(
+      todayAfterLog.newStarts.map((item) => item.id),
+    );
+    expect(todayAfterReload.load).toBe(10);
+  });
+
+  it("increases refill capacity by the work actually added", () => {
+    const todayIso = startOfLocalDay(now).toISOString();
+    const tomorrowIso = addDays(startOfLocalDay(now), 1).toISOString();
+    const completedAttempts: Attempt[] = Array.from(
+      { length: DAILY_PLAN_CAPACITY },
+      (_, index) => ({
+        id: `attempt_${index}`,
+        problemId: `done_${index}`,
+        attemptedAt: now.toISOString(),
+        result: "solved_clean",
+        plannedForDate: "2026-05-19",
+      }),
+    );
+    const dueReview = problem({
+      id: "due_review",
+      title: "Due review",
+      status: "reviewing",
+      idealReviewAt: todayIso,
+      nextReviewAt: tomorrowIso,
+    });
+    const newStarts = Array.from({ length: 3 }, (_, index) =>
+      problem({
+        id: `new_${index}`,
+        title: `New ${index}`,
+        nextReviewAt: tomorrowIso,
+      }),
+    );
+    const initial: LeetLoopData = {
+      ...data([dueReview, ...newStarts], completedAttempts),
+      settings: {
+        dailyTarget: 5,
+        reservedNewStartsPerDay: 3,
+        extraDailyCapacity: {},
+      },
+    };
+
+    const result = refillTodayPlan(initial, { now });
+    const today = getUpcomingPlan(result.data, { now, days: 1 })[0]!;
+
+    expect(result.addedCount).toBe(4);
+    expect(today.reviews.map((item) => item.id)).toEqual(["due_review"]);
+    expect(today.newStarts.map((item) => item.id)).toEqual(["new_0", "new_1", "new_2"]);
+    expect(today.completedCount).toBe(5);
+    expect(today.load).toBe(9);
+    expect(today.capacity).toBe(9);
+  });
+
   it("refills a full batch when a snoozed item still holds a today slot", () => {
     const completedAttempts: Attempt[] = Array.from(
       { length: DAILY_PLAN_CAPACITY - 1 },
