@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
-import { DEFAULT_PATTERN_TAGS, normalizePatternTags } from "@/lib/tags";
+import { DEFAULT_PATTERN_TAGS, inferPrimaryPattern, normalizePatternTags } from "@/lib/tags";
 import { DIFFICULTIES, PLATFORMS, type Difficulty, type Platform } from "@/types/problem";
 import { useLeetLoop } from "./LeetLoopProvider";
 
@@ -23,6 +23,7 @@ export function ProblemForm() {
   const [platform, setPlatform] = useState<Platform>("LeetCode");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [customTags, setCustomTags] = useState("");
+  const [primaryOverride, setPrimaryOverride] = useState<string>();
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
 
@@ -30,6 +31,13 @@ export function ProblemForm() {
     () => normalizePatternTags([...selectedTags, ...splitCustomTags(customTags)]),
     [customTags, selectedTags],
   );
+
+  // Derived, not stored: honor a manual pick while it stays in the pattern set,
+  // otherwise default to inference from the current patterns.
+  const primaryPattern =
+    primaryOverride && allPatterns.includes(primaryOverride)
+      ? primaryOverride
+      : inferPrimaryPattern(allPatterns) ?? "";
 
   function toggleTag(tag: string) {
     setSelectedTags((current) =>
@@ -57,6 +65,7 @@ export function ProblemForm() {
       platform,
       difficulty,
       patterns: allPatterns,
+      primaryPattern: primaryPattern || undefined,
       notes,
     });
 
@@ -156,6 +165,26 @@ export function ProblemForm() {
           placeholder="Counting, Queue"
           value={customTags}
         />
+      </label>
+
+      <label className="block text-sm font-medium">
+        Primary concept
+        <select
+          className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:bg-[var(--surface-subtle)]"
+          disabled={allPatterns.length === 0}
+          onChange={(event) => setPrimaryOverride(event.target.value)}
+          value={primaryPattern}
+        >
+          {allPatterns.length === 0 ? <option value="">Select a pattern tag first</option> : null}
+          {allPatterns.map((tag) => (
+            <option key={tag} value={tag}>
+              {tag}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs font-normal text-[var(--muted)]">
+          The single concept this problem is for. Defaults from your tags.
+        </span>
       </label>
 
       <label className="block text-sm font-medium">

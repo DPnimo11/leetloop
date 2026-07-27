@@ -6,7 +6,7 @@ import type {
 } from "@/types/problem-set";
 import type { ProblemInput } from "@/types/problem";
 import { RAW_PROBLEM_SET_ENTRIES } from "./problemSetData";
-import { normalizePatternTags } from "./tags";
+import { inferPrimaryPattern, normalizePatternTags } from "./tags";
 
 export const LEETCODE_PROBLEM_BASE_URL = "https://leetcode.com/problems";
 
@@ -89,6 +89,7 @@ function canonicalizeLeetcodeSlug(slug: string): string {
 
 function createTemplateFromEntry(entry: RawProblemSetEntry): ProblemTemplate {
   const [setSlug, sourceGroup, questionFrontendId, titleSlug, title, difficulty, topicTags, neetcodeSlug] = entry;
+  const patterns = normalizePatternTags(topicTags.split("|").filter(Boolean));
 
   return {
     id: `${setSlug}:${titleSlug}`,
@@ -97,7 +98,8 @@ function createTemplateFromEntry(entry: RawProblemSetEntry): ProblemTemplate {
     url: leetcodeProblemUrl(titleSlug),
     platform: "LeetCode",
     difficulty: DIFFICULTY_LABELS[difficulty],
-    patterns: normalizePatternTags(topicTags.split("|").filter(Boolean)),
+    patterns,
+    primaryPattern: inferPrimaryPattern(patterns, [sourceGroup]),
     sourceSetSlugs: SET_MEMBERSHIPS_BY_SLUG.get(titleSlug) ?? [setSlug],
     sourceGroups: [sourceGroup],
     questionFrontendId,
@@ -157,6 +159,7 @@ export function createProblemInputFromTemplate(template: ProblemTemplate): Probl
     platform: "LeetCode",
     difficulty: template.difficulty,
     patterns: normalizePatternTags(template.patterns),
+    primaryPattern: template.primaryPattern,
     status: "new",
     leetcodeSlug: template.titleSlug,
     sourceSetSlugs: template.sourceSetSlugs,

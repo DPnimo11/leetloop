@@ -8,6 +8,7 @@ import { scheduleNextReview } from "./scheduling";
 import { isDueOnOrBefore, toLocalDateKey } from "./dates";
 import { createProblemInputFromTemplate, getProblemLeetcodeSlug, normalizeLeetcodeSlug } from "./problemSets";
 import { createDefaultSettings, normalizeSettings, updateSettings as updateSettingsInData } from "./settings";
+import { normalizePrimaryPattern } from "./tags";
 
 export const STORAGE_VERSION = 1;
 export const STORAGE_KEY = "leetloop:data:v1";
@@ -69,6 +70,7 @@ export function createProblem(
     platform: input.platform ?? "LeetCode",
     difficulty: input.difficulty,
     patterns: input.patterns ?? [],
+    primaryPattern: normalizePrimaryPattern(input.primaryPattern, input.patterns ?? []),
     status: input.status ?? "new",
     notes: input.notes?.trim() || undefined,
     createdAt: nowIso,
@@ -140,6 +142,7 @@ function applyProblemUpdates(
   updatedAt: string,
 ): Problem {
   const url = updates.url?.trim() ?? problem.url;
+  const patterns = updates.patterns ?? problem.patterns;
 
   return {
     ...problem,
@@ -147,6 +150,8 @@ function applyProblemUpdates(
     title: updates.title?.trim() ?? problem.title,
     url,
     notes: updates.notes === undefined ? problem.notes : updates.notes.trim() || undefined,
+    // Keep primaryPattern a member of patterns even when patterns change.
+    primaryPattern: normalizePrimaryPattern(updates.primaryPattern ?? problem.primaryPattern, patterns),
     updatedAt,
     leetcodeSlug: updates.leetcodeSlug ?? (updates.url ? normalizeLeetcodeSlug(url) : problem.leetcodeSlug),
   };
@@ -307,6 +312,10 @@ function normalizeProblem(value: unknown): Problem | undefined {
     return undefined;
   }
 
+  const patterns = Array.isArray(candidate.patterns)
+    ? candidate.patterns.filter((pattern): pattern is string => typeof pattern === "string" && pattern.length > 0)
+    : [];
+
   return {
     ...candidate,
     id: candidate.id,
@@ -314,9 +323,9 @@ function normalizeProblem(value: unknown): Problem | undefined {
     url: candidate.url,
     platform: candidate.platform,
     difficulty: candidate.difficulty,
-    patterns: Array.isArray(candidate.patterns)
-      ? candidate.patterns.filter((pattern): pattern is string => typeof pattern === "string" && pattern.length > 0)
-      : [],
+    patterns,
+    // Validate/infer against the cleaned patterns; legacy exports lack this field.
+    primaryPattern: normalizePrimaryPattern(candidate.primaryPattern, patterns),
     status: candidate.status,
     idealReviewAt:
       typeof candidate.idealReviewAt === "string"

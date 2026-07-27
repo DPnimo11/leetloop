@@ -34,6 +34,18 @@ export function AvailabilityBadge({ problem }: { problem: Problem }) {
   );
 }
 
+export function PrimaryPatternBadge({ pattern }: { pattern?: string }) {
+  if (!pattern) {
+    return null;
+  }
+
+  return (
+    <span className="inline-flex rounded-full border border-[var(--accent)] bg-[#e6f4f1] px-2 py-0.5 text-xs font-semibold text-[var(--accent-strong)]">
+      {pattern}
+    </span>
+  );
+}
+
 export function TagPill({ tag }: { tag: string }) {
   return (
     <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface-subtle)] px-2 py-0.5 text-xs font-medium text-[#475467]">

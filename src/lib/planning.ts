@@ -1,4 +1,4 @@
-import type { LeetLoopData } from "@/types/storage";
+import type { LeetLoopData, LeetLoopSettings } from "@/types/storage";
 import type { Problem } from "@/types/problem";
 import { addDays, parseDate, startOfLocalDay, toLocalDateKey } from "./dates";
 import { hasExpiredSnooze, isProblemAvailable } from "./availability";
@@ -8,6 +8,7 @@ import {
   getDailyTarget,
   getExtraDailyCapacity,
   getReservedNewStarts,
+  isFocusModeEnabled,
 } from "./settings";
 
 export const DAILY_PLAN_CAPACITY = DEFAULT_DAILY_TARGET;
@@ -50,6 +51,37 @@ function sortByCreatedDate(problems: Problem[]): Problem[] {
 
     return aTime - bTime || a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
   });
+}
+
+// New-start order. Default: oldest added first. Focus mode: group by
+// primaryPattern, largest group first, keeping createdAt order within a group.
+// IMPORTANT NOTICE FROM RONALD - WILL SCHEDULE FROM LARGEST GROUP, SO CATEGORY OF MOST PROBLEMS
+function sortNewStarts(problems: Problem[], settings?: Partial<LeetLoopSettings>): Problem[] {
+  const byCreated = sortByCreatedDate(problems);
+
+  if (!isFocusModeEnabled(settings)) {
+    return byCreated;
+  }
+
+  const groups = new Map<string, Problem[]>();
+  for (const problem of byCreated) {
+    const key = problem.primaryPattern ?? "";
+    const group = groups.get(key) ?? [];
+    group.push(problem);
+    groups.set(key, group);
+  }
+
+  // Each group is already createdAt-sorted, so group[0] is its earliest add.
+  return [...groups.keys()]
+    .sort((a, b) => {
+      const ga = groups.get(a)!;
+      const gb = groups.get(b)!;
+      const aEarliest = parseDate(ga[0].createdAt)?.getTime() ?? 0;
+      const bEarliest = parseDate(gb[0].createdAt)?.getTime() ?? 0;
+
+      return gb.length - ga.length || aEarliest - bEarliest || a.localeCompare(b);
+    })
+    .flatMap((key) => groups.get(key)!);
 }
 
 function getIdealReviewAt(problem: Problem): string | undefined {
@@ -120,11 +152,16 @@ export function getReviewsForDate(problems: Problem[], date: Date, today = new D
   );
 }
 
-export function getNewStartsForDate(problems: Problem[], date: Date, today = new Date()): Problem[] {
+export function getNewStartsForDate(
+  problems: Problem[],
+  date: Date,
+  today = new Date(),
+  settings?: Partial<LeetLoopSettings>,
+): Problem[] {
   const dateKey = toLocalDateKey(date);
   const todayKey = toLocalDateKey(today);
 
-  return sortByCreatedDate(
+  return sortNewStarts(
     problems.filter((problem) => {
       if (!isNewProblem(problem)) {
         return false;
@@ -139,6 +176,7 @@ export function getNewStartsForDate(problems: Problem[], date: Date, today = new
         ? Boolean(plannedDateKey && plannedDateKey <= todayKey)
         : plannedDateKey === dateKey;
     }),
+    settings,
   );
 }
 
@@ -293,13 +331,14 @@ export function planDailyWork(
     }
   }
 
-  const newProblems = sortByCreatedDate(
+  const newProblems = sortNewStarts(
     data.problems.filter(
       (problem) =>
         !frozenProblemIds.has(problem.id) &&
         isNewProblem(problem) &&
         isProblemAvailable(problem, now),
     ),
+    data.settings,
   );
   const reviewProblems = sortByIdealReviewDate(
     data.problems.filter(
@@ -643,7 +682,7 @@ export function getUpcomingPlan(
   for (let index = 0; index < days; index += 1) {
     const date = addDays(today, index);
     const reviews = getReviewsForDate(data.problems, date, now);
-    const newStarts = getNewStartsForDate(data.problems, date, now);
+    const newStarts = getNewStartsForDate(data.problems, date, now, data.settings);
     const completedIds = getCompletedProblemIdsForDate(data, date);
     const deferredIds = getDeferredProblemIdsForDate(data, date);
     const pendingIds = new Set([
@@ -677,15 +716,18 @@ export function countUnscheduledNewProblems(data: LeetLoopData, now = new Date()
 
 export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Problem[] {
   const dateKey = toLocalDateKey(date);
-
-  return sortByPlanThenCreatedDate(
-    data.problems.filter(
-      (problem) =>
-        isNewProblem(problem) &&
-        isProblemAvailable(problem, date) &&
-        getPlannedDateKey(problem) !== dateKey,
-    ),
+  const candidates = data.problems.filter(
+    (problem) =>
+      isNewProblem(problem) &&
+      isProblemAvailable(problem, date) &&
+      getPlannedDateKey(problem) !== dateKey,
   );
+
+  // In focus mode, refill continues the largest remaining category rather than
+  // the plain plan-date order, so manual "Add more today" stays on-concept.
+  return isFocusModeEnabled(data.settings)
+    ? sortNewStarts(candidates, data.settings)
+    : sortByPlanThenCreatedDate(candidates);
 }
 
 export function countRefillCandidateProblems(data: LeetLoopData, date: Date): number {

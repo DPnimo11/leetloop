@@ -7,7 +7,7 @@ import { formatDate } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { getDailyTarget, getReservedNewStarts } from "@/lib/settings";
 import type { Problem } from "@/types/problem";
-import { AvailabilityBadge, DifficultyBadge, StatusBadge, TagPill } from "./Badges";
+import { AvailabilityBadge, DifficultyBadge, PrimaryPatternBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
 import { SnoozeMenu } from "./SnoozeMenu";
@@ -30,6 +30,7 @@ function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new
             </Link>
             <DifficultyBadge difficulty={problem.difficulty} />
             <StatusBadge status={problem.status} />
+            <PrimaryPatternBadge pattern={problem.primaryPattern} />
             <AvailabilityBadge problem={problem} />
             <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-semibold text-[var(--muted)]">
               {kind === "review" ? "Review" : "Start"}
