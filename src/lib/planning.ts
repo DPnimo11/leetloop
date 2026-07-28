@@ -8,7 +8,6 @@ import {
   getDailyTarget,
   getExtraDailyCapacity,
   getReservedNewStarts,
-  isFocusModeEnabled,
 } from "./settings";
 
 export const DAILY_PLAN_CAPACITY = DEFAULT_DAILY_TARGET;
@@ -53,35 +52,44 @@ function sortByCreatedDate(problems: Problem[]): Problem[] {
   });
 }
 
-// New-start order. Default: oldest added first. Focus mode: group by
-// primaryPattern, largest group first, keeping createdAt order within a group.
-// IMPORTANT NOTICE FROM RONALD - WILL SCHEDULE FROM LARGEST GROUP, SO CATEGORY OF MOST PROBLEMS
-function sortNewStarts(problems: Problem[], settings?: Partial<LeetLoopSettings>): Problem[] {
-  const byCreated = sortByCreatedDate(problems);
+// Float the manual priority category to the front of an already-ordered list,
+// keeping the base order within each part. Everything else keeps its place, so
+// remaining slots top up normally once the chosen category runs out.
+function floatPriorityCategory(problems: Problem[], settings?: Partial<LeetLoopSettings>): Problem[] {
+  const priority = settings?.priorityCategory;
 
-  if (!isFocusModeEnabled(settings)) {
-    return byCreated;
+  if (!priority) {
+    return problems;
   }
 
-  const groups = new Map<string, Problem[]>();
-  for (const problem of byCreated) {
-    const key = problem.primaryPattern ?? "";
-    const group = groups.get(key) ?? [];
-    group.push(problem);
-    groups.set(key, group);
+  const inCategory = problems.filter((problem) => problem.primaryPattern === priority);
+  const rest = problems.filter((problem) => problem.primaryPattern !== priority);
+  return [...inCategory, ...rest];
+}
+
+// New-start order: oldest added first, with the manual priority category
+// (if any) leading today and upcoming days.
+function orderNewStarts(problems: Problem[], settings?: Partial<LeetLoopSettings>): Problem[] {
+  return floatPriorityCategory(sortByCreatedDate(problems), settings);
+}
+
+// Distinct primaryPattern values among the user's new, available problems,
+// most-populated first, for the Today category picker.
+export function getAvailableNewStartCategories(
+  data: LeetLoopData,
+  now = new Date(),
+): { category: string; count: number }[] {
+  const counts = new Map<string, number>();
+
+  for (const problem of data.problems) {
+    if (isNewProblem(problem) && isProblemAvailable(problem, now) && problem.primaryPattern) {
+      counts.set(problem.primaryPattern, (counts.get(problem.primaryPattern) ?? 0) + 1);
+    }
   }
 
-  // Each group is already createdAt-sorted, so group[0] is its earliest add.
-  return [...groups.keys()]
-    .sort((a, b) => {
-      const ga = groups.get(a)!;
-      const gb = groups.get(b)!;
-      const aEarliest = parseDate(ga[0].createdAt)?.getTime() ?? 0;
-      const bEarliest = parseDate(gb[0].createdAt)?.getTime() ?? 0;
-
-      return gb.length - ga.length || aEarliest - bEarliest || a.localeCompare(b);
-    })
-    .flatMap((key) => groups.get(key)!);
+  return [...counts.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
 }
 
 function getIdealReviewAt(problem: Problem): string | undefined {
@@ -161,7 +169,7 @@ export function getNewStartsForDate(
   const dateKey = toLocalDateKey(date);
   const todayKey = toLocalDateKey(today);
 
-  return sortNewStarts(
+  return orderNewStarts(
     problems.filter((problem) => {
       if (!isNewProblem(problem)) {
         return false;
@@ -331,7 +339,7 @@ export function planDailyWork(
     }
   }
 
-  const newProblems = sortNewStarts(
+  const newProblems = orderNewStarts(
     data.problems.filter(
       (problem) =>
         !frozenProblemIds.has(problem.id) &&
@@ -723,11 +731,8 @@ export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Prob
       getPlannedDateKey(problem) !== dateKey,
   );
 
-  // In focus mode, refill continues the largest remaining category rather than
-  // the plain plan-date order, so manual "Add more today" stays on-concept.
-  return isFocusModeEnabled(data.settings)
-    ? sortNewStarts(candidates, data.settings)
-    : sortByPlanThenCreatedDate(candidates);
+  // A manual priority category leads the refill batch; otherwise pull in plan-date order.
+  return floatPriorityCategory(sortByPlanThenCreatedDate(candidates), data.settings);
 }
 
 export function countRefillCandidateProblems(data: LeetLoopData, date: Date): number {

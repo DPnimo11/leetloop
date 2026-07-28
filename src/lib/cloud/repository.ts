@@ -56,7 +56,7 @@ type SettingsRow = {
   daily_target: number | null;
   reserved_new_starts_per_day: number | null;
   extra_daily_capacity: Record<string, number> | null;
-  focus_mode: boolean | null;
+  priority_category: string | null;
 };
 
 // --- row <-> app mappers -----------------------------------------------------
@@ -160,7 +160,7 @@ function settingsToRow(settings: LeetLoopSettings, userId: string): SettingsRow 
     daily_target: settings.dailyTarget,
     reserved_new_starts_per_day: settings.reservedNewStartsPerDay,
     extra_daily_capacity: settings.extraDailyCapacity,
-    focus_mode: settings.focusMode ?? false,
+    priority_category: settings.priorityCategory ?? null,
   };
 }
 
@@ -197,7 +197,7 @@ export async function loadCloudData(
         dailyTarget: settingsRow.daily_target ?? undefined,
         reservedNewStartsPerDay: settingsRow.reserved_new_starts_per_day ?? undefined,
         extraDailyCapacity: settingsRow.extra_daily_capacity ?? {},
-        focusMode: settingsRow.focus_mode ?? false,
+        priorityCategory: settingsRow.priority_category ?? undefined,
       })
     : createDefaultSettings();
 

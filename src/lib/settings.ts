@@ -45,7 +45,6 @@ export function createDefaultSettings(): LeetLoopSettings {
     dailyTarget: DEFAULT_DAILY_TARGET,
     reservedNewStartsPerDay: DEFAULT_RESERVED_NEW_STARTS,
     extraDailyCapacity: {},
-    focusMode: false,
   };
 }
 
@@ -65,12 +64,11 @@ export function normalizeSettings(value: unknown): LeetLoopSettings {
       dailyTarget,
     ),
     extraDailyCapacity: normalizeExtraDailyCapacity(candidate.extraDailyCapacity),
-    focusMode: Boolean(candidate.focusMode),
+    priorityCategory:
+      typeof candidate.priorityCategory === "string" && candidate.priorityCategory.trim()
+        ? candidate.priorityCategory.trim()
+        : undefined,
   };
-}
-
-export function isFocusModeEnabled(settings?: Partial<LeetLoopSettings>): boolean {
-  return Boolean(settings?.focusMode);
 }
 
 export function getDailyTarget(settings?: Partial<LeetLoopSettings>): number {

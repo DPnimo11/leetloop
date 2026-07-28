@@ -206,7 +206,6 @@ describe("storage helpers", () => {
       dailyTarget: 5,
       reservedNewStartsPerDay: 1,
       extraDailyCapacity: {},
-      focusMode: false,
     });
   });
 
@@ -262,8 +261,16 @@ describe("storage helpers", () => {
       extraDailyCapacity: {
         "2026-05-18": 3,
       },
-      focusMode: false,
     });
+  });
+
+  it("round-trips the priority category setting through export/import", () => {
+    const base = createEmptyData(now);
+    const withPriority = { ...base, settings: { ...base.settings, priorityCategory: "BFS" } };
+
+    const imported = importData(exportData(withPriority));
+
+    expect(imported.settings.priorityCategory).toBe("BFS");
   });
 
   it("detects template duplicates by LeetCode slug", () => {

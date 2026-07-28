@@ -6,6 +6,7 @@ import { createDefaultSettings } from "./settings";
 import { addDays, startOfLocalDay, toLocalDateKey } from "./dates";
 import {
   DAILY_PLAN_CAPACITY,
+  getAvailableNewStartCategories,
   getCompletedNewProblemIdsForDate,
   getUpcomingPlan,
   planNewProblemStarts,
@@ -1068,5 +1069,56 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[0]?.deferredCount).toBe(1);
     expect(result.addedCount).toBe(DAILY_PLAN_CAPACITY);
     expect(upcoming[0]?.newStarts).toHaveLength(DAILY_PLAN_CAPACITY);
+  });
+});
+
+describe("priority category scheduling", () => {
+  // createdAt order interleaves categories, so the priority float is visible.
+  const mixed = [
+    problem({ id: "dp1", primaryPattern: "1D DP", patterns: ["1D DP"], createdAt: "2026-05-01T00:00:00.000Z" }),
+    problem({ id: "bfs1", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-02T00:00:00.000Z" }),
+    problem({ id: "arrays1", primaryPattern: "Arrays", patterns: ["Arrays"], createdAt: "2026-05-03T00:00:00.000Z" }),
+    problem({ id: "bfs2", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-04T00:00:00.000Z" }),
+    problem({ id: "dp2", primaryPattern: "1D DP", patterns: ["1D DP"], createdAt: "2026-05-05T00:00:00.000Z" }),
+    problem({ id: "bfs3", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-06T00:00:00.000Z" }),
+  ];
+
+  function withSettings(problems: Problem[], settings: Partial<LeetLoopData["settings"]>): LeetLoopData {
+    return {
+      ...data(problems),
+      settings: { ...createDefaultSettings(), dailyTarget: 6, reservedNewStartsPerDay: 6, ...settings },
+    };
+  }
+
+  it("leads with the priority category, then normal order (focus off)", () => {
+    const planned = planNewProblemStarts(withSettings(mixed, { priorityCategory: "BFS" }), { now });
+    const ids = getUpcomingPlan(planned, { now }).flatMap((day) => day.newStarts).map((p) => p.id);
+
+    // BFS first in createdAt order, then the rest in createdAt order.
+    expect(ids).toEqual(["bfs1", "bfs2", "bfs3", "dp1", "arrays1", "dp2"]);
+  });
+
+  it("keeps plain createdAt order when no priority category is set", () => {
+    const planned = planNewProblemStarts(withSettings(mixed, {}), { now });
+    const ids = getUpcomingPlan(planned, { now }).flatMap((day) => day.newStarts).map((p) => p.id);
+
+    expect(ids).toEqual(["dp1", "bfs1", "arrays1", "bfs2", "dp2", "bfs3"]);
+  });
+
+  it("lists available new-start categories, most-populated first", () => {
+    const categories = getAvailableNewStartCategories(
+      data([
+        ...mixed,
+        problem({ id: "retired1", status: "retired", primaryPattern: "BFS", patterns: ["BFS"] }),
+        problem({ id: "untagged", primaryPattern: undefined, patterns: [] }),
+      ]),
+      now,
+    );
+
+    expect(categories).toEqual([
+      { category: "BFS", count: 3 },
+      { category: "1D DP", count: 2 },
+      { category: "Arrays", count: 1 },
+    ]);
   });
 });

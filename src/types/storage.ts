@@ -7,9 +7,9 @@ export type LeetLoopSettings = {
   dailyTarget: number;
   reservedNewStartsPerDay: number;
   extraDailyCapacity: Record<string, number>;
-  // Optional in the type so partial settings literals stay valid; always
-  // populated by createDefaultSettings / normalizeSettings in practice.
-  focusMode?: boolean;
+  // Manual category focus: schedule new problems from this concept first.
+  // Undefined means no preference.
+  priorityCategory?: string;
 };
 
 export type LeetLoopData = {
