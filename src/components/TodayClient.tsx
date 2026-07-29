@@ -10,7 +10,6 @@ import { leetLoopReviewUrl } from "@/lib/leetcode";
 import {
   countRefillCandidateProblems,
   countUnscheduledNewProblems,
-  getAvailableNewStartCategories,
   getPlannedDateKey,
   getUpcomingPlan,
 } from "@/lib/planning";
@@ -18,7 +17,7 @@ import { getDailyCapacityForDate, getReservedNewStarts } from "@/lib/settings";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
-import { DifficultyBadge, PrimaryPatternBadge, StatusBadge, TagPill } from "./Badges";
+import { DifficultyBadge, StatusBadge, TagPill } from "./Badges";
 import { DailyLeetCodeCard } from "./DailyLeetCodeCard";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
@@ -42,7 +41,6 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
               {template.title}
             </a>
             <DifficultyBadge difficulty={template.difficulty} />
-            <PrimaryPatternBadge pattern={template.primaryPattern} />
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {template.patterns.slice(0, 5).map((tag) => (
@@ -116,7 +114,6 @@ function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?
             </span>
             {problem ? <DifficultyBadge difficulty={problem.difficulty} /> : null}
             {problem ? <StatusBadge status={problem.status} /> : null}
-            {problem ? <PrimaryPatternBadge pattern={problem.primaryPattern} /> : null}
           </div>
           {problem ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -147,7 +144,7 @@ function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?
 }
 
 export function TodayClient() {
-  const { data, isTemplateInQueue, ready, repopulateToday, updateSettings } = useLeetLoop();
+  const { data, isTemplateInQueue, ready, repopulateToday } = useLeetLoop();
   const [refillMessage, setRefillMessage] = useState("");
   const today = new Date();
   const todayKey = toLocalDateKey(today);
@@ -156,13 +153,9 @@ export function TodayClient() {
   const todayPlanDay = getUpcomingPlan(data, { now: today, days: 1 })[0];
   const plannedReviews = todayPlanDay?.reviews ?? [];
   const plannedNewToday = todayPlanDay?.newStarts ?? [];
-  const priorityCategory = data.settings.priorityCategory ?? "";
-  const availableCategories = getAvailableNewStartCategories(data, today);
-  // Keep the current choice visible even after its new problems run out.
-  const categoryOptions =
-    priorityCategory && !availableCategories.some((item) => item.category === priorityCategory)
-      ? [{ category: priorityCategory, count: 0 }, ...availableCategories]
-      : availableCategories;
+  const focusConcept = isFocusModeEnabled(data.settings)
+    ? mostCommonPrimaryPattern(plannedNewToday)
+    : undefined;
   const deferredTodayCount = todayPlanDay?.deferredCount ?? 0;
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const futurePlannedNewCount = activeProblems.filter(
@@ -193,7 +186,7 @@ export function TodayClient() {
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
   const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
-  const dailyPlanTotal = Math.max(dailyCapacity, readyCount + completedTodayCount);
+  const dailyPlanTotal = readyCount + completedTodayCount;
   const remainingNewProblemCount = activeProblems.filter((problem) => problem.status === "new").length;
   const clearedNewProblemCount = activeProblems.length - remainingNewProblemCount;
   const newProblemProgress =
@@ -245,66 +238,58 @@ export function TodayClient() {
     setRefillMessage(
       addedCount
         ? `Added ${addedCount} more to today.`
-        : "No queued new problems are available.",
+        : "No eligible upcoming work is available.",
     );
   }
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
-            Today
-          </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
-            {heroText}
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">{heroCopy}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {categoryOptions.length ? (
-            <label className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)]">
-              <span className="text-[var(--muted)]">Prioritize</span>
-              <select
-                className="bg-transparent text-sm font-semibold outline-none"
-                onChange={(event) => updateSettings({ priorityCategory: event.target.value || undefined })}
-                value={priorityCategory}
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
+                Today
+              </p>
+              {focusConcept ? (
+                <span className="inline-flex rounded-full border border-[var(--accent)] bg-[#e6f4f1] px-2 py-0.5 text-xs font-semibold text-[var(--accent-strong)]">
+                  Focus: {focusConcept}
+                </span>
+              ) : null}
+            </div>
+            <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
+              {heroText}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">{heroCopy}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {canRefillToday ? (
+              <button
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
+                onClick={addMoreToday}
+                type="button"
               >
-                <option value="">All categories</option>
-                {categoryOptions.map((item) => (
-                  <option key={item.category} value={item.category}>
-                    {item.category} ({item.count === 0 ? "0 left" : item.count})
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {canRefillToday ? (
-            <button
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
-              onClick={addMoreToday}
-              type="button"
+                <RefreshCw size={16} />
+                Add more today
+              </button>
+            ) : null}
+            <Link
+              className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+              href="/add"
             >
-              <RefreshCw size={16} />
-              Add more today
-            </button>
-          ) : null}
-          <Link
-            className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
-            href="/add"
-          >
-            <Plus size={16} />
-            Add problem
-          </Link>
-          <Link
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
-            href="/problem-sets"
-          >
-            Browse sets
-          </Link>
+              <Plus size={16} />
+              Add problem
+            </Link>
+            <Link
+              className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+              href="/problem-sets"
+            >
+              Browse sets
+            </Link>
+          </div>
         </div>
         {refillMessage ? (
-          <p className="text-sm font-medium text-emerald-700 sm:basis-full">{refillMessage}</p>
+          <p className="mt-4 text-sm font-medium text-emerald-700">{refillMessage}</p>
         ) : null}
       </section>
 
