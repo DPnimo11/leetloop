@@ -15,6 +15,7 @@ import { toLocalDateKey } from "@/lib/dates";
 import type { LeetCodeDailyProblem } from "@/lib/dailyLeetcode";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { getProblemLeetcodeSlug } from "@/lib/problemSets";
+import { areProblemListTagsHidden } from "@/lib/settings";
 import { normalizePatternTags } from "@/lib/tags";
 import type { Problem } from "@/types/problem";
 import { AttemptModal } from "./AttemptModal";
@@ -110,6 +111,7 @@ export function DailyLeetCodeCard() {
     () => normalizePatternTags(dailyProblem?.topicTags.map((tag) => tag.name) ?? []),
     [dailyProblem],
   );
+  const hideTags = areProblemListTagsHidden(data.settings);
   const completedToday = queuedProblem
     ? data.attempts.some(
         (attempt) =>
@@ -226,7 +228,7 @@ export function DailyLeetCodeCard() {
             <DifficultyBadge difficulty={dailyProblem.difficulty} />
           </div>
 
-          {topicTags.length ? (
+          {!hideTags && topicTags.length ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {topicTags.slice(0, 6).map((tag) => (
                 <TagPill key={tag} tag={tag} />

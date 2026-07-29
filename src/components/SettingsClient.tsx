@@ -34,6 +34,7 @@ export function SettingsClient({ account }: { account: AccountInfo }) {
       account={account}
       initialDailyTarget={data.settings.dailyTarget}
       initialFocusMode={data.settings.focusMode ?? false}
+      initialHideTagsInProblemLists={data.settings.hideTagsInProblemLists ?? false}
       initialReservedNewStarts={data.settings.reservedNewStartsPerDay}
       updateSettings={updateSettings}
     />
@@ -44,12 +45,14 @@ function SettingsPanels({
   account,
   initialDailyTarget,
   initialFocusMode,
+  initialHideTagsInProblemLists,
   initialReservedNewStarts,
   updateSettings,
 }: {
   account: AccountInfo;
   initialDailyTarget: number;
   initialFocusMode: boolean;
+  initialHideTagsInProblemLists: boolean;
   initialReservedNewStarts: number;
   updateSettings: (updates: Partial<LeetLoopSettings>) => void;
 }) {
@@ -59,11 +62,18 @@ function SettingsPanels({
   const [savedReservedNewStarts, setSavedReservedNewStarts] = useState(initialReservedNewStarts);
   const [focusMode, setFocusMode] = useState(initialFocusMode);
   const [savedFocusMode, setSavedFocusMode] = useState(initialFocusMode);
+  const [hideTagsInProblemLists, setHideTagsInProblemLists] = useState(
+    initialHideTagsInProblemLists,
+  );
+  const [savedHideTagsInProblemLists, setSavedHideTagsInProblemLists] = useState(
+    initialHideTagsInProblemLists,
+  );
   const [message, setMessage] = useState("");
   const dirty =
     dailyTarget !== savedDailyTarget ||
     reservedNewStarts !== savedReservedNewStarts ||
-    focusMode !== savedFocusMode;
+    focusMode !== savedFocusMode ||
+    hideTagsInProblemLists !== savedHideTagsInProblemLists;
 
   function changeDailyTarget(nextValue: number) {
     const nextTarget = clampDailyTarget(nextValue);
@@ -82,15 +92,22 @@ function SettingsPanels({
     setMessage("");
   }
 
+  function changeHideTagsInProblemLists(nextValue: boolean) {
+    setHideTagsInProblemLists(nextValue);
+    setMessage("");
+  }
+
   function saveSettings() {
     updateSettings({
       dailyTarget,
       reservedNewStartsPerDay: reservedNewStarts,
       focusMode,
+      hideTagsInProblemLists,
     });
     setSavedDailyTarget(dailyTarget);
     setSavedReservedNewStarts(reservedNewStarts);
     setSavedFocusMode(focusMode);
+    setSavedHideTagsInProblemLists(hideTagsInProblemLists);
     setMessage("Saved");
   }
 
@@ -106,6 +123,10 @@ function SettingsPanels({
         focusMode={focusMode}
         reservedNewStarts={reservedNewStarts}
         saveSettings={saveSettings}
+      />
+      <DisplaySettings
+        changeHideTagsInProblemLists={changeHideTagsInProblemLists}
+        hideTagsInProblemLists={hideTagsInProblemLists}
       />
       <SaveBar dirty={dirty} message={message} saveSettings={saveSettings} />
       <BackupControls />
@@ -326,6 +347,46 @@ function SettingsForm({
         >
           <Check className={focusMode ? "opacity-100" : "opacity-0"} size={15} />
           {focusMode ? "On" : "Off"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function DisplaySettings({
+  changeHideTagsInProblemLists,
+  hideTagsInProblemLists,
+}: {
+  changeHideTagsInProblemLists: (nextValue: boolean) => void;
+  hideTagsInProblemLists: boolean;
+}) {
+  return (
+    <section className="rounded-lg border border-[var(--border)] bg-white p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
+            Display
+          </p>
+          <h2 className="mt-1 text-lg font-semibold tracking-normal">
+            Hide tags in problem lists
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">
+            Keep Today, Upcoming, All Problems, and the LeetCode Daily card compact. Tags
+            remain available on problem details and in filters.
+          </p>
+        </div>
+        <button
+          aria-pressed={hideTagsInProblemLists}
+          className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
+            hideTagsInProblemLists
+              ? "border-[var(--accent)] bg-[#e6f4f1] text-[var(--accent-strong)]"
+              : "border-[var(--border)] bg-white text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
+          }`}
+          onClick={() => changeHideTagsInProblemLists(!hideTagsInProblemLists)}
+          type="button"
+        >
+          <Check className={hideTagsInProblemLists ? "opacity-100" : "opacity-0"} size={15} />
+          {hideTagsInProblemLists ? "On" : "Off"}
         </button>
       </div>
     </section>

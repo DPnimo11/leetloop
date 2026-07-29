@@ -46,6 +46,7 @@ export function createDefaultSettings(): LeetLoopSettings {
     reservedNewStartsPerDay: DEFAULT_RESERVED_NEW_STARTS,
     extraDailyCapacity: {},
     focusMode: false,
+    hideTagsInProblemLists: false,
   };
 }
 
@@ -66,11 +67,16 @@ export function normalizeSettings(value: unknown): LeetLoopSettings {
     ),
     extraDailyCapacity: normalizeExtraDailyCapacity(candidate.extraDailyCapacity),
     focusMode: Boolean(candidate.focusMode),
+    hideTagsInProblemLists: Boolean(candidate.hideTagsInProblemLists),
   };
 }
 
 export function isFocusModeEnabled(settings?: Partial<LeetLoopSettings>): boolean {
   return Boolean(settings?.focusMode);
+}
+
+export function areProblemListTagsHidden(settings?: Partial<LeetLoopSettings>): boolean {
+  return Boolean(settings?.hideTagsInProblemLists);
 }
 
 export function getDailyTarget(settings?: Partial<LeetLoopSettings>): number {

@@ -10,6 +10,7 @@ export type LeetLoopSettings = {
   // Optional in the type so partial settings literals stay valid; always
   // populated by createDefaultSettings / normalizeSettings in practice.
   focusMode?: boolean;
+  hideTagsInProblemLists?: boolean;
 };
 
 export type LeetLoopData = {
