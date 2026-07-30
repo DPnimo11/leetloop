@@ -10,6 +10,7 @@ export type LeetLoopSettings = {
   // Manual category focus: schedule new problems from this concept first.
   // Undefined means no preference.
   priorityCategory?: string;
+  hideTagsInProblemLists?: boolean;
 };
 
 export type LeetLoopData = {

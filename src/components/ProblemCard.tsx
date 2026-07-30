@@ -7,13 +7,17 @@ import type { Problem } from "@/types/problem";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { formatAttemptResult, formatDate } from "@/lib/format";
 import { isProblemAvailable } from "@/lib/availability";
+import { areProblemListTagsHidden } from "@/lib/settings";
 import { AvailabilityBadge, DifficultyBadge, PrimaryPatternBadge, StatusBadge, TagPill } from "./Badges";
 import { AttemptModal } from "./AttemptModal";
+import { useLeetLoop } from "./LeetLoopProvider";
 import { SnoozeMenu } from "./SnoozeMenu";
 
 export function ProblemCard({ problem }: { problem: Problem }) {
   const [logging, setLogging] = useState(false);
+  const { data } = useLeetLoop();
   const available = isProblemAvailable(problem);
+  const hideTags = areProblemListTagsHidden(data.settings);
 
   return (
     <article className="rounded-lg border border-[var(--border)] bg-white p-4">
@@ -28,17 +32,19 @@ export function ProblemCard({ problem }: { problem: Problem }) {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={problem.difficulty} />
             <StatusBadge status={problem.status} />
-            <PrimaryPatternBadge pattern={problem.primaryPattern} />
+            {hideTags ? null : <PrimaryPatternBadge pattern={problem.primaryPattern} />}
             <AvailabilityBadge problem={problem} />
             {available ? (
               <span className="text-sm text-[var(--muted)]">Planned: {formatDate(problem.nextReviewAt)}</span>
             ) : null}
           </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {problem.patterns.slice(0, 5).map((tag) => (
-              <TagPill key={tag} tag={tag} />
-            ))}
-          </div>
+          {hideTags ? null : (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {problem.patterns.slice(0, 5).map((tag) => (
+                <TagPill key={tag} tag={tag} />
+              ))}
+            </div>
+          )}
           <p className="mt-3 text-sm text-[var(--muted)]">
             Last: {formatAttemptResult(problem.lastResult)} - Reviews: {problem.reviewCount}
           </p>

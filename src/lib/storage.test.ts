@@ -48,6 +48,7 @@ describe("storage helpers", () => {
     expect(loaded.problems[0]?.leetcodeSlug).toBe("two-sum");
     expect(loaded.settings.dailyTarget).toBe(5);
     expect(loaded.settings.reservedNewStartsPerDay).toBe(1);
+    expect(loaded.settings.hideTagsInProblemLists).toBe(false);
   });
 
   it("logs attempts and updates the linked problem schedule", () => {
@@ -206,6 +207,7 @@ describe("storage helpers", () => {
       dailyTarget: 5,
       reservedNewStartsPerDay: 1,
       extraDailyCapacity: {},
+      hideTagsInProblemLists: false,
     });
   });
 
@@ -250,6 +252,7 @@ describe("storage helpers", () => {
             "2026-05-18": 3,
             nope: 4,
           },
+          hideTagsInProblemLists: true,
         },
         updatedAt: now.toISOString(),
       }),
@@ -261,6 +264,7 @@ describe("storage helpers", () => {
       extraDailyCapacity: {
         "2026-05-18": 3,
       },
+      hideTagsInProblemLists: true,
     });
   });
 

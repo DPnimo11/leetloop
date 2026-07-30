@@ -45,6 +45,7 @@ export function createDefaultSettings(): LeetLoopSettings {
     dailyTarget: DEFAULT_DAILY_TARGET,
     reservedNewStartsPerDay: DEFAULT_RESERVED_NEW_STARTS,
     extraDailyCapacity: {},
+    hideTagsInProblemLists: false,
   };
 }
 
@@ -68,9 +69,13 @@ export function normalizeSettings(value: unknown): LeetLoopSettings {
       typeof candidate.priorityCategory === "string" && candidate.priorityCategory.trim()
         ? candidate.priorityCategory.trim()
         : undefined,
+    hideTagsInProblemLists: Boolean(candidate.hideTagsInProblemLists),
   };
 }
 
+export function areProblemListTagsHidden(settings?: Partial<LeetLoopSettings>): boolean {
+  return Boolean(settings?.hideTagsInProblemLists);
+}
 export function getDailyTarget(settings?: Partial<LeetLoopSettings>): number {
   return clampDailyTarget(Number(settings?.dailyTarget ?? DEFAULT_DAILY_TARGET));
 }

@@ -5,14 +5,26 @@ import { CalendarDays } from "lucide-react";
 import { countUnscheduledNewProblems, getUpcomingPlan } from "@/lib/planning";
 import { formatDate } from "@/lib/format";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
-import { getDailyTarget, getReservedNewStarts } from "@/lib/settings";
+import {
+  areProblemListTagsHidden,
+  getDailyTarget,
+  getReservedNewStarts,
+} from "@/lib/settings";
 import type { Problem } from "@/types/problem";
 import { AvailabilityBadge, DifficultyBadge, PrimaryPatternBadge, StatusBadge, TagPill } from "./Badges";
 import { EmptyState } from "./EmptyState";
 import { useLeetLoop } from "./LeetLoopProvider";
 import { SnoozeMenu } from "./SnoozeMenu";
 
-function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new" }) {
+function ProblemRow({
+  problem,
+  kind,
+  hideTags,
+}: {
+  problem: Problem;
+  kind: "review" | "new";
+  hideTags: boolean;
+}) {
   const idealDate = problem.idealReviewAt;
   const planDiffersFromIdeal =
     idealDate && formatDate(idealDate) !== formatDate(problem.nextReviewAt);
@@ -30,17 +42,19 @@ function ProblemRow({ problem, kind }: { problem: Problem; kind: "review" | "new
             </Link>
             <DifficultyBadge difficulty={problem.difficulty} />
             <StatusBadge status={problem.status} />
-            <PrimaryPatternBadge pattern={problem.primaryPattern} />
+            {hideTags ? null : <PrimaryPatternBadge pattern={problem.primaryPattern} />}
             <AvailabilityBadge problem={problem} />
             <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-semibold text-[var(--muted)]">
               {kind === "review" ? "Review" : "Start"}
             </span>
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {problem.patterns.slice(0, 4).map((tag) => (
-              <TagPill key={tag} tag={tag} />
-            ))}
-          </div>
+          {hideTags ? null : (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {problem.patterns.slice(0, 4).map((tag) => (
+                <TagPill key={tag} tag={tag} />
+              ))}
+            </div>
+          )}
           {kind === "review" && planDiffersFromIdeal ? (
             <p className="mt-2 text-sm text-[var(--muted)]">
               Ideal review {formatDate(idealDate)}
@@ -69,6 +83,7 @@ export function UpcomingClient() {
   const unscheduledNewCount = countUnscheduledNewProblems(data);
   const dailyTarget = getDailyTarget(data.settings);
   const reservedNewStarts = getReservedNewStarts(data.settings);
+  const hideTags = areProblemListTagsHidden(data.settings);
 
   if (!ready) {
     return <EmptyState title="Loading upcoming plan" copy="Your data is loading." />;
@@ -138,10 +153,20 @@ export function UpcomingClient() {
               {day.reviews.length || day.newStarts.length ? (
                 <div className="mt-3 space-y-3">
                   {day.reviews.map((problem) => (
-                    <ProblemRow key={problem.id} kind="review" problem={problem} />
+                    <ProblemRow
+                      hideTags={hideTags}
+                      key={problem.id}
+                      kind="review"
+                      problem={problem}
+                    />
                   ))}
                   {day.newStarts.map((problem) => (
-                    <ProblemRow key={problem.id} kind="new" problem={problem} />
+                    <ProblemRow
+                      hideTags={hideTags}
+                      key={problem.id}
+                      kind="new"
+                      problem={problem}
+                    />
                   ))}
                 </div>
               ) : (

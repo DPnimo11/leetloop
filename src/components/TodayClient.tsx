@@ -14,7 +14,11 @@ import {
   getPlannedDateKey,
   getUpcomingPlan,
 } from "@/lib/planning";
-import { getDailyCapacityForDate, getReservedNewStarts } from "@/lib/settings";
+import {
+  areProblemListTagsHidden,
+  getDailyCapacityForDate,
+  getReservedNewStarts,
+} from "@/lib/settings";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
 import type { ProblemTemplate } from "@/types/problem-set";
@@ -25,8 +29,9 @@ import { useLeetLoop } from "./LeetLoopProvider";
 import { ProblemCard } from "./ProblemCard";
 
 function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
-  const { addProblemFromTemplate, ready } = useLeetLoop();
+  const { addProblemFromTemplate, data, ready } = useLeetLoop();
   const sourceLabel = template.sourceSetSlugs.map(getProblemSetName).join(", ");
+  const hideTags = areProblemListTagsHidden(data.settings);
 
   return (
     <article className="rounded-lg border border-[var(--border)] bg-white p-4">
@@ -42,13 +47,15 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
               {template.title}
             </a>
             <DifficultyBadge difficulty={template.difficulty} />
-            <PrimaryPatternBadge pattern={template.primaryPattern} />
+            {hideTags ? null : <PrimaryPatternBadge pattern={template.primaryPattern} />}
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {template.patterns.slice(0, 5).map((tag) => (
-              <TagPill key={tag} tag={tag} />
-            ))}
-          </div>
+          {hideTags ? null : (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {template.patterns.slice(0, 5).map((tag) => (
+                <TagPill key={tag} tag={tag} />
+              ))}
+            </div>
+          )}
           <p className="mt-2 text-sm text-[var(--muted)]">{sourceLabel}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -94,7 +101,15 @@ function getCompletedDailyAttempts(attempts: Attempt[], today: Date): Attempt[] 
   return [...latestByProblem.values()];
 }
 
-function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?: Problem }) {
+function CompletedProblemCard({
+  attempt,
+  problem,
+  hideTags,
+}: {
+  attempt: Attempt;
+  problem?: Problem;
+  hideTags: boolean;
+}) {
   return (
     <article className="rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -116,9 +131,11 @@ function CompletedProblemCard({ attempt, problem }: { attempt: Attempt; problem?
             </span>
             {problem ? <DifficultyBadge difficulty={problem.difficulty} /> : null}
             {problem ? <StatusBadge status={problem.status} /> : null}
-            {problem ? <PrimaryPatternBadge pattern={problem.primaryPattern} /> : null}
+            {problem && !hideTags ? (
+              <PrimaryPatternBadge pattern={problem.primaryPattern} />
+            ) : null}
           </div>
-          {problem ? (
+          {problem && !hideTags ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {problem.patterns.slice(0, 5).map((tag) => (
                 <TagPill key={tag} tag={tag} />
@@ -153,6 +170,7 @@ export function TodayClient() {
   const todayKey = toLocalDateKey(today);
   const dailyCapacity = getDailyCapacityForDate(data, today);
   const reservedNewStarts = getReservedNewStarts(data.settings);
+  const hideTags = areProblemListTagsHidden(data.settings);
   const todayPlanDay = getUpcomingPlan(data, { now: today, days: 1 })[0];
   const plannedReviews = todayPlanDay?.reviews ?? [];
   const plannedNewToday = todayPlanDay?.newStarts ?? [];
@@ -382,6 +400,7 @@ export function TodayClient() {
           {completedToday.map((attempt) => (
             <CompletedProblemCard
               attempt={attempt}
+              hideTags={hideTags}
               key={`${attempt.problemId}-${attempt.id}`}
               problem={data.problems.find((problem) => problem.id === attempt.problemId)}
             />
