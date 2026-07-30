@@ -10,6 +10,7 @@ import { leetLoopReviewUrl } from "@/lib/leetcode";
 import {
   countRefillCandidateProblems,
   countUnscheduledNewProblems,
+  getAvailableNewStartCategories,
   getPlannedDateKey,
   getUpcomingPlan,
 } from "@/lib/planning";
@@ -17,7 +18,6 @@ import {
   areProblemListTagsHidden,
   getDailyCapacityForDate,
   getReservedNewStarts,
-  isFocusModeEnabled,
 } from "@/lib/settings";
 import type { Attempt } from "@/types/attempt";
 import type { Problem } from "@/types/problem";
@@ -81,27 +81,6 @@ function SuggestedProblemCard({ template }: { template: ProblemTemplate }) {
       </div>
     </article>
   );
-}
-
-// The concept most of today's new starts share, for the focus-mode label.
-function mostCommonPrimaryPattern(problems: Problem[]): string | undefined {
-  const counts = new Map<string, number>();
-  for (const problem of problems) {
-    if (problem.primaryPattern) {
-      counts.set(problem.primaryPattern, (counts.get(problem.primaryPattern) ?? 0) + 1);
-    }
-  }
-
-  let best: string | undefined;
-  let bestCount = 0;
-  for (const [pattern, count] of counts) {
-    if (count > bestCount) {
-      best = pattern;
-      bestCount = count;
-    }
-  }
-
-  return best;
 }
 
 function getCompletedDailyAttempts(attempts: Attempt[], today: Date): Attempt[] {
@@ -185,7 +164,7 @@ function CompletedProblemCard({
 }
 
 export function TodayClient() {
-  const { data, isTemplateInQueue, ready, repopulateToday } = useLeetLoop();
+  const { data, isTemplateInQueue, ready, repopulateToday, updateSettings } = useLeetLoop();
   const [refillMessage, setRefillMessage] = useState("");
   const today = new Date();
   const todayKey = toLocalDateKey(today);
@@ -195,9 +174,13 @@ export function TodayClient() {
   const todayPlanDay = getUpcomingPlan(data, { now: today, days: 1 })[0];
   const plannedReviews = todayPlanDay?.reviews ?? [];
   const plannedNewToday = todayPlanDay?.newStarts ?? [];
-  const focusConcept = isFocusModeEnabled(data.settings)
-    ? mostCommonPrimaryPattern(plannedNewToday)
-    : undefined;
+  const priorityCategory = data.settings.priorityCategory ?? "";
+  const availableCategories = getAvailableNewStartCategories(data, today);
+  // Keep the current choice visible even after its new problems run out.
+  const categoryOptions =
+    priorityCategory && !availableCategories.some((item) => item.category === priorityCategory)
+      ? [{ category: priorityCategory, count: 0 }, ...availableCategories]
+      : availableCategories;
   const deferredTodayCount = todayPlanDay?.deferredCount ?? 0;
   const activeProblems = data.problems.filter((problem) => problem.status !== "retired");
   const futurePlannedNewCount = activeProblems.filter(
@@ -289,22 +272,32 @@ export function TodayClient() {
       <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
-                Today
-              </p>
-              {focusConcept ? (
-                <span className="inline-flex rounded-full border border-[var(--accent)] bg-[#e6f4f1] px-2 py-0.5 text-xs font-semibold text-[var(--accent-strong)]">
-                  Focus: {focusConcept}
-                </span>
-              ) : null}
-            </div>
+            <p className="text-sm font-medium uppercase tracking-normal text-[var(--accent-strong)]">
+              Today
+            </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-normal text-[var(--foreground)]">
               {heroText}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">{heroCopy}</p>
           </div>
           <div className="flex flex-wrap gap-2 sm:justify-end">
+            {categoryOptions.length ? (
+              <label className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground)]">
+                <span className="text-[var(--muted)]">Prioritize</span>
+                <select
+                  className="bg-transparent text-sm font-semibold outline-none"
+                  onChange={(event) => updateSettings({ priorityCategory: event.target.value || undefined })}
+                  value={priorityCategory}
+                >
+                  <option value="">All categories</option>
+                  {categoryOptions.map((item) => (
+                    <option key={item.category} value={item.category}>
+                      {item.category} ({item.count === 0 ? "0 left" : item.count})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             {canRefillToday ? (
               <button
                 className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"

@@ -33,7 +33,6 @@ export function SettingsClient({ account }: { account: AccountInfo }) {
     <SettingsPanels
       account={account}
       initialDailyTarget={data.settings.dailyTarget}
-      initialFocusMode={data.settings.focusMode ?? false}
       initialHideTagsInProblemLists={data.settings.hideTagsInProblemLists ?? false}
       initialReservedNewStarts={data.settings.reservedNewStartsPerDay}
       updateSettings={updateSettings}
@@ -44,14 +43,12 @@ export function SettingsClient({ account }: { account: AccountInfo }) {
 function SettingsPanels({
   account,
   initialDailyTarget,
-  initialFocusMode,
   initialHideTagsInProblemLists,
   initialReservedNewStarts,
   updateSettings,
 }: {
   account: AccountInfo;
   initialDailyTarget: number;
-  initialFocusMode: boolean;
   initialHideTagsInProblemLists: boolean;
   initialReservedNewStarts: number;
   updateSettings: (updates: Partial<LeetLoopSettings>) => void;
@@ -60,8 +57,6 @@ function SettingsPanels({
   const [savedDailyTarget, setSavedDailyTarget] = useState(initialDailyTarget);
   const [reservedNewStarts, setReservedNewStarts] = useState(initialReservedNewStarts);
   const [savedReservedNewStarts, setSavedReservedNewStarts] = useState(initialReservedNewStarts);
-  const [focusMode, setFocusMode] = useState(initialFocusMode);
-  const [savedFocusMode, setSavedFocusMode] = useState(initialFocusMode);
   const [hideTagsInProblemLists, setHideTagsInProblemLists] = useState(
     initialHideTagsInProblemLists,
   );
@@ -72,7 +67,6 @@ function SettingsPanels({
   const dirty =
     dailyTarget !== savedDailyTarget ||
     reservedNewStarts !== savedReservedNewStarts ||
-    focusMode !== savedFocusMode ||
     hideTagsInProblemLists !== savedHideTagsInProblemLists;
 
   function changeDailyTarget(nextValue: number) {
@@ -87,26 +81,18 @@ function SettingsPanels({
     setMessage("");
   }
 
-  function changeFocusMode(nextValue: boolean) {
-    setFocusMode(nextValue);
-    setMessage("");
-  }
-
   function changeHideTagsInProblemLists(nextValue: boolean) {
     setHideTagsInProblemLists(nextValue);
     setMessage("");
   }
-
   function saveSettings() {
     updateSettings({
       dailyTarget,
       reservedNewStartsPerDay: reservedNewStarts,
-      focusMode,
       hideTagsInProblemLists,
     });
     setSavedDailyTarget(dailyTarget);
     setSavedReservedNewStarts(reservedNewStarts);
-    setSavedFocusMode(focusMode);
     setSavedHideTagsInProblemLists(hideTagsInProblemLists);
     setMessage("Saved");
   }
@@ -116,11 +102,9 @@ function SettingsPanels({
       <AccountSection account={account} />
       <SettingsForm
         changeDailyTarget={changeDailyTarget}
-        changeFocusMode={changeFocusMode}
         changeReservedNewStarts={changeReservedNewStarts}
         dailyTarget={dailyTarget}
         dirty={dirty}
-        focusMode={focusMode}
         reservedNewStarts={reservedNewStarts}
         saveSettings={saveSettings}
       />
@@ -217,20 +201,16 @@ function AccountSection({ account }: { account: AccountInfo }) {
 
 function SettingsForm({
   changeDailyTarget,
-  changeFocusMode,
   changeReservedNewStarts,
   dailyTarget,
   dirty,
-  focusMode,
   reservedNewStarts,
   saveSettings,
 }: {
   changeDailyTarget: (nextValue: number) => void;
-  changeFocusMode: (nextValue: boolean) => void;
   changeReservedNewStarts: (nextValue: number) => void;
   dailyTarget: number;
   dirty: boolean;
-  focusMode: boolean;
   reservedNewStarts: number;
   saveSettings: () => void;
 }) {
@@ -328,27 +308,6 @@ function SettingsForm({
           No review slots will be planned while new problems are available.
         </p>
       ) : null}
-      <div className="mt-4 flex flex-col gap-4 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-base font-semibold tracking-normal">Focus mode</h3>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">
-            Introduce new problems one concept at a time, largest category first. Reviews are unaffected.
-          </p>
-        </div>
-        <button
-          aria-pressed={focusMode}
-          className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold ${
-            focusMode
-              ? "border-[var(--accent)] bg-[#e6f4f1] text-[var(--accent-strong)]"
-              : "border-[var(--border)] bg-white text-[var(--foreground)] hover:bg-[var(--surface-subtle)]"
-          }`}
-          onClick={() => changeFocusMode(!focusMode)}
-          type="button"
-        >
-          <Check className={focusMode ? "opacity-100" : "opacity-0"} size={15} />
-          {focusMode ? "On" : "Off"}
-        </button>
-      </div>
     </section>
   );
 }
