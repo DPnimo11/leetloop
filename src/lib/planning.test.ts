@@ -1102,6 +1102,41 @@ describe("planNewProblemStarts", () => {
     expect(upcoming[1]?.newStarts).toHaveLength(1);
   });
 
+  it("adds exactly one item when extending a cleared Today queue by one", () => {
+    const completedAttempts: Attempt[] = Array.from({ length: DAILY_PLAN_CAPACITY }, (_, index) => ({
+      id: `attempt_${index}`,
+      problemId: `done_${index}`,
+      attemptedAt: now.toISOString(),
+      result: "solved_clean",
+      plannedForDate: "2026-05-19",
+    }));
+    const candidates = Array.from({ length: 3 }, (_, index) =>
+      problem({
+        id: `new_${index}`,
+        title: `New ${index}`,
+        nextReviewAt: "2026-05-20T12:00:00.000Z",
+      }),
+    );
+    const result = refillTodayPlan(data(candidates, completedAttempts), {
+      now,
+      count: 1,
+    });
+    const today = getUpcomingPlan(result.data, { now, days: 1 })[0]!;
+    const reloadedToday = getUpcomingPlan(
+      planNewProblemStarts(result.data, { now }),
+      { now, days: 1 },
+    )[0]!;
+
+    expect(result.addedCount).toBe(1);
+    expect(today.newStarts).toHaveLength(1);
+    expect(today.completedCount).toBe(DAILY_PLAN_CAPACITY);
+    expect(today.load).toBe(DAILY_PLAN_CAPACITY + 1);
+    expect(today.capacity).toBe(DAILY_PLAN_CAPACITY + 1);
+    expect(reloadedToday.newStarts.map((item) => item.id)).toEqual(
+      today.newStarts.map((item) => item.id),
+    );
+  });
+
   it("gives an explicit refill its own new-start reserve", () => {
     const todayIso = startOfLocalDay(now).toISOString();
     const tomorrowIso = addDays(startOfLocalDay(now), 1).toISOString();

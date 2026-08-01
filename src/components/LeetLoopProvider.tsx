@@ -75,7 +75,7 @@ type LeetLoopContextValue = {
   snoozeProblem: (problemId: string, until?: Date) => void;
   resumeProblem: (problemId: string) => void;
   swapTodayNewProblem: (problemId: string) => SwapTodayProblemResult | undefined;
-  repopulateToday: () => number;
+  addOneToday: () => number;
   exportJson: () => string;
   importJson: (raw: string) => Promise<LeetLoopData>;
   getProblemAttempts: (problemId: string) => Attempt[];
@@ -445,10 +445,10 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
     });
   }, [commit]);
 
-  const repopulateToday = useCallback(() => {
+  const addOneToday = useCallback(() => {
     return commit<number>((current) => {
       const now = new Date();
-      const next = refillTodayPlan(current, { now });
+      const next = refillTodayPlan(current, { now, count: 1 });
 
       return {
         data: next.data,
@@ -505,7 +505,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       snoozeProblem,
       resumeProblem,
       swapTodayNewProblem,
-      repopulateToday,
+      addOneToday,
       exportJson,
       importJson,
       getProblemAttempts,
@@ -523,7 +523,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       loadError,
       logAttempt,
       resumeProblem,
-      repopulateToday,
+      addOneToday,
       ready,
       syncError,
       syncing,

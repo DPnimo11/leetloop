@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Check, ExternalLink, ListPlus, Plus, RefreshCw } from "lucide-react";
+import { Check, ExternalLink, ListPlus, Plus } from "lucide-react";
 import { getAllProblemTemplates, getProblemSetName } from "@/lib/problemSets";
 import { toLocalDateKey } from "@/lib/dates";
 import { formatAttemptResult, formatDateTime } from "@/lib/format";
@@ -166,10 +166,10 @@ function CompletedProblemCard({
 
 export function TodayClient() {
   const {
+    addOneToday,
     data,
     isTemplateInQueue,
     ready,
-    repopulateToday,
     swapTodayNewProblem,
     updateSettings,
   } = useLeetLoop();
@@ -219,7 +219,7 @@ export function TodayClient() {
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
   const canSwapNewProblem = getRefillCandidateProblems(data, today).length > 0;
-  const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
+  const canAddOneToday = readyCount === 0 && refillCandidateCount > 0;
   const dailyPlanTotal = readyCount + completedTodayCount;
   const remainingNewProblemCount = activeProblems.filter((problem) => problem.status === "new").length;
   const clearedNewProblemCount = activeProblems.length - remainingNewProblemCount;
@@ -267,11 +267,11 @@ export function TodayClient() {
     return <EmptyState title="Loading queue" copy="Your data is loading." />;
   }
 
-  function addMoreToday() {
-    const addedCount = repopulateToday();
+  function addOneMoreToday() {
+    const addedCount = addOneToday();
     setQueueMessage(
       addedCount
-        ? `Added ${addedCount} more to today.`
+        ? "Added one more problem to today."
         : "No eligible upcoming work is available.",
     );
   }
@@ -317,14 +317,14 @@ export function TodayClient() {
                 </select>
               </label>
             ) : null}
-            {canRefillToday ? (
+            {canAddOneToday ? (
               <button
                 className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-strong)]"
-                onClick={addMoreToday}
+                onClick={addOneMoreToday}
                 type="button"
               >
-                <RefreshCw size={16} />
-                Add more today
+                <ListPlus size={16} />
+                +1 today
               </button>
             ) : null}
             <Link
