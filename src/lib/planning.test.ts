@@ -689,10 +689,8 @@ describe("planNewProblemStarts", () => {
     const todayBefore = getUpcomingPlan(planned, { now, days: 1 })[0];
     const loggedProblem = todayBefore?.newStarts[0];
 
-    expect([
-      ...(todayBefore?.reviews ?? []),
-      ...(todayBefore?.newStarts ?? []),
-    ].map((item) => item.id)).toEqual(["review_1", "new_0"]);
+    expect(todayBefore?.reviews.map((item) => item.id)).toEqual(["review_1"]);
+    expect(todayBefore?.newStarts).toHaveLength(1);
     expect(loggedProblem).toBeDefined();
 
     const logged = logAttempt(
@@ -1088,7 +1086,8 @@ describe("planNewProblemStarts", () => {
 
     expect(result.addedCount).toBe(5);
     expect(today.reviews.map((item) => item.id)).toEqual(["due_review_0", "due_review_1"]);
-    expect(today.newStarts.map((item) => item.id)).toEqual(["new_0", "new_1", "new_2"]);
+    expect(today.newStarts).toHaveLength(3);
+    expect(today.newStarts.every((item) => item.id.startsWith("new_"))).toBe(true);
     expect(today.reviews.some((item) => item.id === futureReview.id)).toBe(false);
     expect(today.completedCount).toBe(5);
     expect(today.load).toBe(10);
@@ -1164,7 +1163,9 @@ describe("planNewProblemStarts", () => {
 
     expect(result.addedCount).toBe(4);
     expect(today.reviews.map((item) => item.id)).toEqual(["due_review"]);
-    expect(today.newStarts.map((item) => item.id)).toEqual(["new_0", "new_1", "new_2"]);
+    expect(new Set(today.newStarts.map((item) => item.id))).toEqual(
+      new Set(["new_0", "new_1", "new_2"]),
+    );
     expect(today.completedCount).toBe(5);
     expect(today.load).toBe(9);
     expect(today.capacity).toBe(9);
@@ -1210,14 +1211,15 @@ describe("planNewProblemStarts", () => {
 });
 
 describe("priority category scheduling", () => {
-  // createdAt order interleaves categories, so the priority float is visible.
+  // createdAt order interleaves categories, so category priority and
+  // randomized order are both visible.
   const mixed = [
     problem({ id: "dp1", primaryPattern: "1D DP", patterns: ["1D DP"], createdAt: "2026-05-01T00:00:00.000Z" }),
-    problem({ id: "bfs1", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-02T00:00:00.000Z" }),
+    problem({ id: "bfs-a", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-02T00:00:00.000Z" }),
     problem({ id: "arrays1", primaryPattern: "Arrays", patterns: ["Arrays"], createdAt: "2026-05-03T00:00:00.000Z" }),
-    problem({ id: "bfs2", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-04T00:00:00.000Z" }),
+    problem({ id: "bfs-b", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-04T00:00:00.000Z" }),
     problem({ id: "dp2", primaryPattern: "1D DP", patterns: ["1D DP"], createdAt: "2026-05-05T00:00:00.000Z" }),
-    problem({ id: "bfs3", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-06T00:00:00.000Z" }),
+    problem({ id: "bfs-c", primaryPattern: "BFS", patterns: ["BFS"], createdAt: "2026-05-06T00:00:00.000Z" }),
   ];
 
   function withSettings(problems: Problem[], settings: Partial<LeetLoopData["settings"]>): LeetLoopData {
@@ -1227,19 +1229,24 @@ describe("priority category scheduling", () => {
     };
   }
 
-  it("leads with the priority category, then normal order (focus off)", () => {
+  it("leads with the priority category and randomizes each partition", () => {
     const planned = planNewProblemStarts(withSettings(mixed, { priorityCategory: "BFS" }), { now });
     const ids = getUpcomingPlan(planned, { now }).flatMap((day) => day.newStarts).map((p) => p.id);
 
-    // BFS first in createdAt order, then the rest in createdAt order.
-    expect(ids).toEqual(["bfs1", "bfs2", "bfs3", "dp1", "arrays1", "dp2"]);
+    expect(ids).toEqual(["bfs-c", "bfs-b", "bfs-a", "arrays1", "dp2", "dp1"]);
+    expect(ids.slice(0, 3).every((id) => id.startsWith("bfs"))).toBe(true);
   });
 
-  it("keeps plain createdAt order when no priority category is set", () => {
+  it("uses a stable randomized order when no priority category is set", () => {
     const planned = planNewProblemStarts(withSettings(mixed, {}), { now });
     const ids = getUpcomingPlan(planned, { now }).flatMap((day) => day.newStarts).map((p) => p.id);
+    const replannedIds = getUpcomingPlan(planNewProblemStarts(planned, { now }), { now })
+      .flatMap((day) => day.newStarts)
+      .map((problem) => problem.id);
 
-    expect(ids).toEqual(["dp1", "bfs1", "arrays1", "bfs2", "dp2", "bfs3"]);
+    expect(ids).toEqual(["bfs-a", "bfs-b", "bfs-c", "arrays1", "dp1", "dp2"]);
+    expect(ids).not.toEqual(["dp1", "bfs-a", "arrays1", "bfs-b", "dp2", "bfs-c"]);
+    expect(replannedIds).toEqual(ids);
   });
 
   it("lists available new-start categories, most-populated first", () => {

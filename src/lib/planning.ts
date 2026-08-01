@@ -43,34 +43,46 @@ export type PlanDailyWorkOptions = {
   frozenTodayProblemIds?: ReadonlySet<string>;
 };
 
-function sortByCreatedDate(problems: Problem[]): Problem[] {
-  return [...problems].sort((a, b) => {
-    const aTime = parseDate(a.createdAt)?.getTime() ?? 0;
-    const bTime = parseDate(b.createdAt)?.getTime() ?? 0;
+function hashString(value: string): number {
+  let hash = 2166136261;
 
-    return aTime - bTime || a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function randomizedOrder(problems: Problem[], seed: string): Problem[] {
+  return [...problems].sort((a, b) => {
+    const aRank = hashString(`${seed}:${a.id}`);
+    const bRank = hashString(`${seed}:${b.id}`);
+
+    return aRank - bRank || a.id.localeCompare(b.id);
   });
 }
 
-// Float the manual priority category to the front of an already-ordered list,
-// keeping the base order within each part. Everything else keeps its place, so
-// remaining slots top up normally once the chosen category runs out.
-function floatPriorityCategory(problems: Problem[], settings?: Partial<LeetLoopSettings>): Problem[] {
+// Use a stable per-day random order so repeated renders and replans do not
+// make visible assignments jump around. A manual priority category still
+// leads, randomized independently from the remaining candidates.
+function orderNewStarts(
+  problems: Problem[],
+  settings: Partial<LeetLoopSettings> | undefined,
+  seed: string,
+): Problem[] {
   const priority = settings?.priorityCategory;
 
   if (!priority) {
-    return problems;
+    return randomizedOrder(problems, seed);
   }
 
   const inCategory = problems.filter((problem) => problem.primaryPattern === priority);
   const rest = problems.filter((problem) => problem.primaryPattern !== priority);
-  return [...inCategory, ...rest];
-}
-
-// New-start order: oldest added first, with the manual priority category
-// (if any) leading today and upcoming days.
-function orderNewStarts(problems: Problem[], settings?: Partial<LeetLoopSettings>): Problem[] {
-  return floatPriorityCategory(sortByCreatedDate(problems), settings);
+  return [
+    ...randomizedOrder(inCategory, `${seed}:priority:${priority}`),
+    ...randomizedOrder(rest, `${seed}:remaining`),
+  ];
 }
 
 // Distinct primaryPattern values among the user's new, available problems,
@@ -102,17 +114,6 @@ function sortByIdealReviewDate(problems: Problem[]): Problem[] {
     const bTime = parseDate(getIdealReviewAt(b))?.getTime() ?? Number.MAX_SAFE_INTEGER;
 
     return aTime - bTime || a.createdAt.localeCompare(b.createdAt) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id);
-  });
-}
-
-function sortByPlanThenCreatedDate(problems: Problem[]): Problem[] {
-  return [...problems].sort((a, b) => {
-    const aPlanTime = parseDate(a.nextReviewAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    const bPlanTime = parseDate(b.nextReviewAt)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    const aCreatedTime = parseDate(a.createdAt)?.getTime() ?? 0;
-    const bCreatedTime = parseDate(b.createdAt)?.getTime() ?? 0;
-
-    return aPlanTime - bPlanTime || aCreatedTime - bCreatedTime || a.title.localeCompare(b.title);
   });
 }
 
@@ -185,6 +186,7 @@ export function getNewStartsForDate(
         : plannedDateKey === dateKey;
     }),
     settings,
+    dateKey,
   );
 }
 
@@ -364,6 +366,7 @@ export function planDailyWork(
         isProblemAvailable(problem, now),
     ),
     data.settings,
+    todayKey,
   );
   const reviewProblems = sortByIdealReviewDate(
     data.problems.filter(
@@ -753,8 +756,7 @@ export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Prob
     },
   );
 
-  // A manual priority category leads the refill batch; otherwise pull in plan-date order.
-  return floatPriorityCategory(sortByPlanThenCreatedDate(candidates), data.settings);
+  return orderNewStarts(candidates, data.settings, dateKey);
 }
 
 function getDueRefillReviewProblems(data: LeetLoopData, date: Date): Problem[] {
