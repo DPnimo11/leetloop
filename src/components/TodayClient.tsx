@@ -12,6 +12,7 @@ import {
   countUnscheduledNewProblems,
   getAvailableNewStartCategories,
   getPlannedDateKey,
+  getRefillCandidateProblems,
   getUpcomingPlan,
 } from "@/lib/planning";
 import {
@@ -164,8 +165,15 @@ function CompletedProblemCard({
 }
 
 export function TodayClient() {
-  const { data, isTemplateInQueue, ready, repopulateToday, updateSettings } = useLeetLoop();
-  const [refillMessage, setRefillMessage] = useState("");
+  const {
+    data,
+    isTemplateInQueue,
+    ready,
+    repopulateToday,
+    swapTodayNewProblem,
+    updateSettings,
+  } = useLeetLoop();
+  const [queueMessage, setQueueMessage] = useState("");
   const today = new Date();
   const todayKey = toLocalDateKey(today);
   const dailyCapacity = getDailyCapacityForDate(data, today);
@@ -210,6 +218,7 @@ export function TodayClient() {
   const completedToday = getCompletedDailyAttempts(data.attempts, today);
   const completedTodayCount = completedToday.length;
   const refillCandidateCount = countRefillCandidateProblems(data, today);
+  const canSwapNewProblem = getRefillCandidateProblems(data, today).length > 0;
   const canRefillToday = readyCount === 0 && refillCandidateCount > 0;
   const dailyPlanTotal = readyCount + completedTodayCount;
   const remainingNewProblemCount = activeProblems.filter((problem) => problem.status === "new").length;
@@ -260,10 +269,20 @@ export function TodayClient() {
 
   function addMoreToday() {
     const addedCount = repopulateToday();
-    setRefillMessage(
+    setQueueMessage(
       addedCount
         ? `Added ${addedCount} more to today.`
         : "No eligible upcoming work is available.",
+    );
+  }
+
+  function swapNewProblem(problem: Problem) {
+    const result = swapTodayNewProblem(problem.id);
+
+    setQueueMessage(
+      result
+        ? `Swapped ${result.swappedOut.title} for ${result.swappedIn.title}. The skipped problem will return tomorrow.`
+        : "No other new problem is available to swap in.",
     );
   }
 
@@ -323,8 +342,8 @@ export function TodayClient() {
             </Link>
           </div>
         </div>
-        {refillMessage ? (
-          <p className="mt-4 text-sm font-medium text-emerald-700">{refillMessage}</p>
+        {queueMessage ? (
+          <p className="mt-4 text-sm font-medium text-emerald-700">{queueMessage}</p>
         ) : null}
       </section>
 
@@ -385,7 +404,17 @@ export function TodayClient() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold tracking-normal">Today&apos;s Plan</h2>
         {todayPlan.length ? (
-          todayPlan.map((problem) => <ProblemCard key={problem.id} problem={problem} />)
+          todayPlan.map((problem) => (
+            <ProblemCard
+              key={problem.id}
+              onSwap={
+                problem.status === "new" && canSwapNewProblem
+                  ? () => swapNewProblem(problem)
+                  : undefined
+              }
+              problem={problem}
+            />
+          ))
         ) : (
           <EmptyState
             title={completedTodayCount || deferredTodayCount ? "Daily plan complete" : "No work due today"}

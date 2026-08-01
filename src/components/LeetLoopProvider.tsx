@@ -34,6 +34,7 @@ import {
   getUpcomingPlan,
   planDailyWork,
   refillTodayPlan,
+  swapTodayNewProblem as swapTodayNewProblemInData,
   type PlanDailyWorkOptions,
 } from "@/lib/planning";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +47,11 @@ type AddTemplateResult = {
 
 type AddProblemOptions = {
   preserveToday?: boolean;
+};
+
+type SwapTodayProblemResult = {
+  swappedOut: Problem;
+  swappedIn: Problem;
 };
 
 type CommitUpdate<T> = {
@@ -68,6 +74,7 @@ type LeetLoopContextValue = {
   logAttempt: (problemId: string, input: AttemptInput) => Attempt;
   snoozeProblem: (problemId: string, until?: Date) => void;
   resumeProblem: (problemId: string) => void;
+  swapTodayNewProblem: (problemId: string) => SwapTodayProblemResult | undefined;
   repopulateToday: () => number;
   exportJson: () => string;
   importJson: (raw: string) => Promise<LeetLoopData>;
@@ -419,6 +426,25 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
     }));
   }, [commit]);
 
+  const swapTodayNewProblem = useCallback((problemId: string) => {
+    return commit<SwapTodayProblemResult | undefined>((current) => {
+      const now = new Date();
+      const next = swapTodayNewProblemInData(current, problemId, { now });
+      const result = next.swappedOut && next.swappedIn
+        ? { swappedOut: next.swappedOut, swappedIn: next.swappedIn }
+        : undefined;
+
+      return {
+        data: next.data,
+        result,
+        planningOptions: {
+          now,
+          frozenTodayProblemIds: next.frozenTodayProblemIds,
+        },
+      };
+    });
+  }, [commit]);
+
   const repopulateToday = useCallback(() => {
     return commit<number>((current) => {
       const now = new Date();
@@ -478,6 +504,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       logAttempt,
       snoozeProblem,
       resumeProblem,
+      swapTodayNewProblem,
       repopulateToday,
       exportJson,
       importJson,
@@ -501,6 +528,7 @@ export function LeetLoopProvider({ children }: { children: ReactNode }) {
       syncError,
       syncing,
       snoozeProblem,
+      swapTodayNewProblem,
       updateProblem,
       updateSettings,
     ],

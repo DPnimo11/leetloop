@@ -759,6 +759,73 @@ export function getRefillCandidateProblems(data: LeetLoopData, date: Date): Prob
   return orderNewStarts(candidates, data.settings, dateKey);
 }
 
+export type SwapTodayNewProblemResult = {
+  data: LeetLoopData;
+  swappedOut?: Problem;
+  swappedIn?: Problem;
+  frozenTodayProblemIds: ReadonlySet<string>;
+};
+
+export function swapTodayNewProblem(
+  data: LeetLoopData,
+  problemId: string,
+  options: { now?: Date } = {},
+): SwapTodayNewProblemResult {
+  const now = options.now ?? new Date();
+  const today = startOfLocalDay(now);
+  const todayPlan = getUpcomingPlan(data, { now, days: 1 })[0];
+  const pendingProblems = todayPlan
+    ? [...todayPlan.reviews, ...todayPlan.newStarts]
+    : [];
+  const swappedOut = todayPlan?.newStarts.find((problem) => problem.id === problemId);
+  const swappedIn = getRefillCandidateProblems(data, now)[0];
+
+  if (!swappedOut || !swappedIn) {
+    return {
+      data,
+      frozenTodayProblemIds: new Set(pendingProblems.map((problem) => problem.id)),
+    };
+  }
+
+  const nowIso = now.toISOString();
+  const todayIso = today.toISOString();
+  const tomorrowIso = addDays(today, 1).toISOString();
+  const frozenTodayProblemIds = new Set([
+    ...pendingProblems
+      .filter((problem) => problem.id !== swappedOut.id)
+      .map((problem) => problem.id),
+    swappedIn.id,
+  ]);
+  const nextData: LeetLoopData = {
+    ...data,
+    problems: data.problems.map((problem) => {
+      if (problem.id === swappedOut.id) {
+        return {
+          ...problem,
+          snoozedAt: nowIso,
+          snoozedUntil: tomorrowIso,
+          // A swap deliberately fills this slot, so the deferred item must not
+          // also consume Today capacity like an ordinary snooze would.
+          planSlotConsumedOn: undefined,
+          updatedAt: nowIso,
+        };
+      }
+
+      return problem.id === swappedIn.id
+        ? { ...problem, nextReviewAt: todayIso, updatedAt: nowIso }
+        : problem;
+    }),
+    updatedAt: nowIso,
+  };
+
+  return {
+    data: planDailyWork(nextData, { now, frozenTodayProblemIds }),
+    swappedOut,
+    swappedIn,
+    frozenTodayProblemIds,
+  };
+}
+
 function getDueRefillReviewProblems(data: LeetLoopData, date: Date): Problem[] {
   const dateKey = toLocalDateKey(date);
 

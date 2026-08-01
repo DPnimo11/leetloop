@@ -11,6 +11,7 @@ import {
   getUpcomingPlan,
   planNewProblemStarts,
   refillTodayPlan,
+  swapTodayNewProblem,
 } from "./planning";
 import { addProblem, logAttempt, snoozeProblem } from "./storage";
 
@@ -709,6 +710,76 @@ describe("planNewProblemStarts", () => {
     expect(todayAfter?.newStarts).toHaveLength(0);
     expect(todayAfter?.completedCount).toBe(1);
     expect(todayAfter?.load).toBe(2);
+  });
+
+  it("swaps a Today new start one-for-one and defers the skipped problem", () => {
+    const initial = {
+      ...data([
+        problem({
+          id: "review_1",
+          status: "reviewing",
+          idealReviewAt: "2026-05-19T00:00:00.000Z",
+          nextReviewAt: "2026-05-19T00:00:00.000Z",
+        }),
+        ...Array.from({ length: 3 }, (_, index) =>
+          problem({
+            id: `new_${index}`,
+            title: `New ${index}`,
+          }),
+        ),
+      ]),
+      settings: {
+        dailyTarget: 2,
+        reservedNewStartsPerDay: 1,
+        extraDailyCapacity: {},
+      },
+    };
+    const planned = planNewProblemStarts(initial, { now });
+    const todayBefore = getUpcomingPlan(planned, { now, days: 1 })[0]!;
+    const skipped = todayBefore.newStarts[0]!;
+    const result = swapTodayNewProblem(planned, skipped.id, { now });
+    const todayAfter = getUpcomingPlan(result.data, { now, days: 1 })[0]!;
+    const storedSkipped = result.data.problems.find((item) => item.id === skipped.id);
+
+    expect(result.swappedOut?.id).toBe(skipped.id);
+    expect(result.swappedIn).toBeDefined();
+    expect(result.swappedIn?.id).not.toBe(skipped.id);
+    expect(todayAfter.reviews.map((item) => item.id)).toEqual(
+      todayBefore.reviews.map((item) => item.id),
+    );
+    expect(todayAfter.newStarts.map((item) => item.id)).toEqual([result.swappedIn?.id]);
+    expect(todayAfter.load).toBe(todayBefore.load);
+    expect(todayAfter.capacity).toBe(todayBefore.capacity);
+    expect(todayAfter.deferredCount).toBe(0);
+    expect(storedSkipped).toMatchObject({
+      snoozedAt: now.toISOString(),
+      snoozedUntil: addDays(startOfLocalDay(now), 1).toISOString(),
+    });
+    expect(storedSkipped?.planSlotConsumedOn).toBeUndefined();
+
+    const reloaded = planNewProblemStarts(result.data, { now });
+    expect(getUpcomingPlan(reloaded, { now, days: 1 })[0]?.newStarts.map((item) => item.id)).toEqual(
+      todayAfter.newStarts.map((item) => item.id),
+    );
+  });
+
+  it("does not swap when no replacement new problem is available", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data([problem({ id: "only_new" })]),
+        settings: {
+          dailyTarget: 1,
+          reservedNewStartsPerDay: 1,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const result = swapTodayNewProblem(planned, "only_new", { now });
+
+    expect(result.data).toBe(planned);
+    expect(result.swappedOut).toBeUndefined();
+    expect(result.swappedIn).toBeUndefined();
   });
 
   it("keeps a completed planned new start counted toward the reserve after reload", () => {

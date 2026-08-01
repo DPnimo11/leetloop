@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ExternalLink, History } from "lucide-react";
+import { ExternalLink, History, Shuffle } from "lucide-react";
 import type { Problem } from "@/types/problem";
 import { leetLoopReviewUrl } from "@/lib/leetcode";
 import { formatAttemptResult, formatDate } from "@/lib/format";
@@ -13,7 +13,7 @@ import { AttemptModal } from "./AttemptModal";
 import { useLeetLoop } from "./LeetLoopProvider";
 import { SnoozeMenu } from "./SnoozeMenu";
 
-export function ProblemCard({ problem }: { problem: Problem }) {
+export function ProblemCard({ problem, onSwap }: { problem: Problem; onSwap?: () => void }) {
   const [logging, setLogging] = useState(false);
   const { data } = useLeetLoop();
   const available = isProblemAvailable(problem);
@@ -51,6 +51,16 @@ export function ProblemCard({ problem }: { problem: Problem }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
+          {onSwap ? (
+            <button
+              className="inline-flex items-center gap-2 rounded-md border border-[var(--accent)] bg-white px-3 py-2 text-sm font-semibold text-[var(--accent-strong)] hover:bg-[#e6f4f1]"
+              onClick={onSwap}
+              type="button"
+            >
+              <Shuffle size={16} />
+              Swap
+            </button>
+          ) : null}
           <SnoozeMenu problem={problem} />
           <a
             className="inline-flex items-center gap-2 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold hover:bg-[var(--surface-subtle)]"
