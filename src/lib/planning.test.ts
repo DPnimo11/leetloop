@@ -763,6 +763,85 @@ describe("planNewProblemStarts", () => {
     );
   });
 
+  it("replaces a swapped new start in place without moving other Today items", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data(
+          Array.from({ length: 5 }, (_, index) =>
+            problem({
+              id: `new_${index}`,
+              title: `New ${index}`,
+            }),
+          ),
+        ),
+        settings: {
+          dailyTarget: 3,
+          reservedNewStartsPerDay: 3,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const todayBefore = getUpcomingPlan(planned, { now, days: 1 })[0]!;
+    const todayBeforeIds = new Set(todayBefore.newStarts.map((item) => item.id));
+    const swappedOut = todayBefore.newStarts[0]!;
+
+    const result = swapTodayNewProblem(planned, swappedOut.id, { now });
+    const todayAfter = getUpcomingPlan(result.data, { now, days: 1 })[0]!;
+    const expectedTodayIds = todayBefore.newStarts.map((item) =>
+      item.id === swappedOut.id ? result.swappedIn!.id : item.id,
+    );
+
+    expect(result.swappedIn).toBeDefined();
+    expect(todayBeforeIds.has(result.swappedIn!.id)).toBe(false);
+    expect(todayAfter.newStarts.map((item) => item.id)).toEqual(expectedTodayIds);
+    expect(new Set(todayAfter.newStarts.map((item) => item.id)).size).toBe(
+      todayAfter.newStarts.length,
+    );
+
+    const reloaded = planNewProblemStarts(result.data, { now });
+    expect(getUpcomingPlan(reloaded, { now, days: 1 })[0]?.newStarts.map((item) => item.id)).toEqual(
+      expectedTodayIds,
+    );
+  });
+
+  it("does not reuse a problem from the updated Today queue across consecutive swaps", () => {
+    const planned = planNewProblemStarts(
+      {
+        ...data(
+          Array.from({ length: 6 }, (_, index) =>
+            problem({
+              id: `new_${index}`,
+              title: `New ${index}`,
+            }),
+          ),
+        ),
+        settings: {
+          dailyTarget: 3,
+          reservedNewStartsPerDay: 3,
+          extraDailyCapacity: {},
+        },
+      },
+      { now },
+    );
+    const firstToday = getUpcomingPlan(planned, { now, days: 1 })[0]!;
+    const firstSwap = swapTodayNewProblem(planned, firstToday.newStarts[0]!.id, { now });
+    const secondToday = getUpcomingPlan(firstSwap.data, { now, days: 1 })[0]!;
+    const secondTodayIds = new Set(secondToday.newStarts.map((item) => item.id));
+    const secondSwap = swapTodayNewProblem(firstSwap.data, secondToday.newStarts[0]!.id, { now });
+    const finalToday = getUpcomingPlan(secondSwap.data, { now, days: 1 })[0]!;
+    const expectedFinalIds = secondToday.newStarts.map((item) =>
+      item.id === secondSwap.swappedOut?.id ? secondSwap.swappedIn!.id : item.id,
+    );
+
+    expect(secondSwap.swappedIn).toBeDefined();
+    expect(secondTodayIds.has(secondSwap.swappedIn!.id)).toBe(false);
+    expect(finalToday.newStarts.map((item) => item.id)).toEqual(expectedFinalIds);
+    expect(new Set(finalToday.newStarts.map((item) => item.id)).size).toBe(
+      finalToday.newStarts.length,
+    );
+  });
+
   it("does not swap when no replacement new problem is available", () => {
     const planned = planNewProblemStarts(
       {

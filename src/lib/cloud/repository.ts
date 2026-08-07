@@ -31,6 +31,7 @@ type ProblemRow = {
   snoozed_at: string | null;
   snoozed_until: string | null;
   plan_slot_consumed_on: string | null;
+  plan_order: number | null;
   review_count: number | null;
   clean_streak: number | null;
   last_result: string | null;
@@ -80,6 +81,7 @@ function problemToRow(problem: Problem, userId: string): ProblemRow {
     snoozed_at: problem.snoozedAt ?? null,
     snoozed_until: problem.snoozedUntil ?? null,
     plan_slot_consumed_on: problem.planSlotConsumedOn ?? null,
+    plan_order: problem.planOrder ?? null,
     review_count: problem.reviewCount,
     clean_streak: problem.cleanStreak,
     last_result: problem.lastResult ?? null,
@@ -118,6 +120,7 @@ function rowToProblem(row: ProblemRow): Problem | undefined {
     snoozedAt: row.snoozed_at ?? undefined,
     snoozedUntil: row.snoozed_at ? row.snoozed_until ?? undefined : undefined,
     planSlotConsumedOn: row.plan_slot_consumed_on ?? undefined,
+    planOrder: row.plan_order ?? undefined,
     reviewCount: row.review_count ?? 0,
     cleanStreak: row.clean_streak ?? 0,
     lastResult: isAttemptResult(row.last_result) ? row.last_result : undefined,

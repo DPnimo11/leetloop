@@ -26,6 +26,8 @@ export type Problem = {
   snoozedAt?: string;
   snoozedUntil?: string;
   planSlotConsumedOn?: string;
+  // Stable position inside a concrete day's new-start queue.
+  planOrder?: number;
   reviewCount: number;
   cleanStreak: number;
   lastResult?: AttemptResult;

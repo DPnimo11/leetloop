@@ -85,6 +85,36 @@ function orderNewStarts(
   ];
 }
 
+function orderPlannedNewStarts(
+  problems: Problem[],
+  settings: Partial<LeetLoopSettings> | undefined,
+  seed: string,
+): Problem[] {
+  const randomized = orderNewStarts(problems, settings, seed);
+  const randomizedIndex = new Map(
+    randomized.map((problem, index) => [problem.id, index]),
+  );
+
+  return [...randomized].sort((a, b) => {
+    const aOrder = a.planOrder;
+    const bOrder = b.planOrder;
+
+    if (aOrder !== undefined && bOrder !== undefined) {
+      return aOrder - bOrder || randomizedIndex.get(a.id)! - randomizedIndex.get(b.id)!;
+    }
+
+    if (aOrder !== undefined) {
+      return -1;
+    }
+
+    if (bOrder !== undefined) {
+      return 1;
+    }
+
+    return randomizedIndex.get(a.id)! - randomizedIndex.get(b.id)!;
+  });
+}
+
 // Distinct primaryPattern values among the user's new, available problems,
 // most-populated first, for the Today category picker.
 export function getAvailableNewStartCategories(
@@ -170,7 +200,7 @@ export function getNewStartsForDate(
   const dateKey = toLocalDateKey(date);
   const todayKey = toLocalDateKey(today);
 
-  return orderNewStarts(
+  return orderPlannedNewStarts(
     problems.filter((problem) => {
       if (!isNewProblem(problem)) {
         return false;
@@ -648,13 +678,20 @@ export function planDailyWork(
       if (
         currentProblem.idealReviewAt === idealReviewAt &&
         currentProblem.nextReviewAt === nextReviewAt &&
+        currentProblem.planOrder === undefined &&
         currentProblem === problem
       ) {
         return currentProblem;
       }
 
       changed = true;
-      return { ...currentProblem, idealReviewAt, nextReviewAt, updatedAt };
+      return {
+        ...currentProblem,
+        idealReviewAt,
+        nextReviewAt,
+        planOrder: undefined,
+        updatedAt,
+      };
     }
 
     if (isNewProblem(currentProblem)) {
@@ -663,16 +700,29 @@ export function planDailyWork(
       }
 
       const nextReviewAt = newAssignments.get(currentProblem.id);
+      const currentDateKey = getPlannedDateKey(currentProblem);
+      const nextDate = parseDate(nextReviewAt);
+      const nextDateKey = nextDate ? toLocalDateKey(nextDate) : undefined;
+      const planOrder = currentDateKey === nextDateKey
+        ? currentProblem.planOrder
+        : undefined;
       if (
         currentProblem.nextReviewAt === nextReviewAt &&
         currentProblem.idealReviewAt === undefined &&
+        currentProblem.planOrder === planOrder &&
         currentProblem === problem
       ) {
         return currentProblem;
       }
 
       changed = true;
-      return { ...currentProblem, idealReviewAt: undefined, nextReviewAt, updatedAt };
+      return {
+        ...currentProblem,
+        idealReviewAt: undefined,
+        nextReviewAt,
+        planOrder,
+        updatedAt,
+      };
     }
 
     return currentProblem;
@@ -790,6 +840,10 @@ export function swapTodayNewProblem(
   const nowIso = now.toISOString();
   const todayIso = today.toISOString();
   const tomorrowIso = addDays(today, 1).toISOString();
+  const todayNewStartOrder = new Map(
+    (todayPlan?.newStarts ?? []).map((problem, index) => [problem.id, index]),
+  );
+  const swappedOutOrder = todayNewStartOrder.get(swappedOut.id)!;
   const frozenTodayProblemIds = new Set([
     ...pendingProblems
       .filter((problem) => problem.id !== swappedOut.id)
@@ -807,13 +861,24 @@ export function swapTodayNewProblem(
           // A swap deliberately fills this slot, so the deferred item must not
           // also consume Today capacity like an ordinary snooze would.
           planSlotConsumedOn: undefined,
+          planOrder: undefined,
           updatedAt: nowIso,
         };
       }
 
-      return problem.id === swappedIn.id
-        ? { ...problem, nextReviewAt: todayIso, updatedAt: nowIso }
-        : problem;
+      if (problem.id === swappedIn.id) {
+        return {
+          ...problem,
+          nextReviewAt: todayIso,
+          planOrder: swappedOutOrder,
+          updatedAt: nowIso,
+        };
+      }
+
+      const existingTodayOrder = todayNewStartOrder.get(problem.id);
+      return existingTodayOrder === undefined
+        ? problem
+        : { ...problem, planOrder: existingTodayOrder, updatedAt: nowIso };
     }),
     updatedAt: nowIso,
   };

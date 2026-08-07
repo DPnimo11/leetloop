@@ -276,6 +276,7 @@ export function logAttempt(
     ...scheduleNextReview(problem, input.result, attemptedAt),
     snoozedAt: undefined,
     snoozedUntil: undefined,
+    planOrder: undefined,
   };
   const problems = data.problems.map((item) => (item.id === problemId ? scheduledProblem : item));
   const nextData = touchData(
@@ -345,6 +346,12 @@ function normalizeProblem(value: unknown): Problem | undefined {
       typeof candidate.planSlotConsumedOn === "string" &&
       /^\d{4}-\d{2}-\d{2}$/.test(candidate.planSlotConsumedOn)
         ? candidate.planSlotConsumedOn
+        : undefined,
+    planOrder:
+      typeof candidate.planOrder === "number" &&
+      Number.isInteger(candidate.planOrder) &&
+      candidate.planOrder >= 0
+        ? candidate.planOrder
         : undefined,
     createdAt: candidate.createdAt ?? new Date().toISOString(),
     updatedAt: candidate.updatedAt ?? new Date().toISOString(),

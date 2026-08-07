@@ -41,11 +41,16 @@ describe("storage helpers", () => {
       idFactory: () => "problem_1",
     });
 
-    const loaded = parseLeetLoopData(exportData(data));
+    const orderedData = {
+      ...data,
+      problems: data.problems.map((problem) => ({ ...problem, planOrder: 2 })),
+    };
+    const loaded = parseLeetLoopData(exportData(orderedData));
 
     expect(loaded.problems).toHaveLength(1);
     expect(loaded.problems[0]?.title).toBe("Two Sum");
     expect(loaded.problems[0]?.leetcodeSlug).toBe("two-sum");
+    expect(loaded.problems[0]?.planOrder).toBe(2);
     expect(loaded.settings.dailyTarget).toBe(5);
     expect(loaded.settings.reservedNewStartsPerDay).toBe(1);
     expect(loaded.settings.hideTagsInProblemLists).toBe(false);
@@ -58,7 +63,10 @@ describe("storage helpers", () => {
     });
 
     const result = logAttempt(
-      data,
+      {
+        ...data,
+        problems: data.problems.map((item) => ({ ...item, planOrder: 0 })),
+      },
       problem.id,
       {
         result: "looked_solution",
@@ -73,6 +81,7 @@ describe("storage helpers", () => {
     expect(result.problem.status).toBe("learning");
     expect(result.problem.idealReviewAt).toBe("2026-05-20T12:00:00.000Z");
     expect(result.problem.nextReviewAt).toBe("2026-05-20T12:00:00.000Z");
+    expect(result.problem.planOrder).toBeUndefined();
     expect(result.problem.reviewCount).toBe(1);
   });
 
